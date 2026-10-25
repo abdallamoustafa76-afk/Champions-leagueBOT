@@ -498,7 +498,7 @@ export function rolesPanel() {
       thumbnail: { url: `${site()}/logo.jpg` },
       description: "Wähle hier deine Rolle für den Champions League Cup.",
       fields: [
-        { name: "👔 Manager", value: "Du willst einen Verein übernehmen und an den Cups teilnehmen? Stell eine Anfrage – die Turnierleitung schaltet dich frei." },
+        { name: "👔 Manager", value: "Du willst einen Verein übernehmen und an den Cups teilnehmen? Die Rolle bekommst du sofort – danach suchst du dir deinen Verein aus." },
         { name: "⚽ Spieler", value: "Du spielst in einer Mannschaft mit oder willst alles verfolgen? Die Rolle bekommst du sofort." },
       ],
       footer: { text: "Wer Manager wird, verliert automatisch die Spieler-Rolle." },

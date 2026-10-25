@@ -220,21 +220,10 @@ async function component(i, context) {
   if (id === "role_manager") {
     if (hasRole(i, cfg.roles.manager)) return eph("Du bist bereits **Manager**.");
     const b = await B.findBan([uid]);
-    if (b) return eph(`❌ Du ${banText(b).replace(/^ist/, "bist")} und kannst gerade keine Manager-Anfrage stellen.`);
-    const { result: isNew } = await mutate("mreq", (r) => { if (r[uid]) return false; r[uid] = Date.now(); return true; }, { initial: {} });
-    if (!isNew) return eph("📨 Deine Manager-Anfrage liegt der Turnierleitung schon vor.");
-    const rulesOk = await F.rulesAccepted(uid);
-    later(context, async () => { const ch = cfg.channels.log; if (ch) await (await import("../lib/discord.mjs")).sendMessage(ch, V.managerRequest(uid, rulesOk)); });
-    return eph("📨 Deine Manager-Anfrage wurde an die Turnierleitung geschickt. Du bekommst eine Direktnachricht, sobald sie entschieden hat.");
-  }
-  if (id.startsWith("mreq_ok:") || id.startsWith("mreq_no:")) {
-    if (!isStaff(i, cfg)) return eph("Das darf nur die Turnierleitung.");
-    const target = id.split(":")[1], ok = id.startsWith("mreq_ok:");
-    await mutate("mreq", (r) => { delete r[target]; }, { initial: {} });
-    const { sendDM } = await import("../lib/discord.mjs");
-    if (ok) await enqueue([{ u: target, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: "Manager-Anfrage angenommen" }]);
-    later(context, () => sendDM(target, { embeds: [{ color: COLOR, title: ok ? "👔 Du bist jetzt Manager!" : "Manager-Anfrage abgelehnt", description: ok ? `Such dir jetzt deinen Verein aus${cfg.channels.reg ? ` in <#${cfg.channels.reg}>` : ""}. Viel Erfolg!` : "Deine Manager-Anfrage wurde abgelehnt. Bei Fragen melde dich bei der Turnierleitung." }] }));
-    return { type: 7, data: { ...V.managerRequest(target, await F.rulesAccepted(target), ok ? "ok" : "no", uid), allowed_mentions: { parse: [] } } };
+    if (b) return eph(`❌ Du ${banText(b).replace(/^ist/, "bist")} und kannst gerade nicht Manager werden.`);
+    await enqueue([{ u: uid, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: "Rollenauswahl: Manager" }]);
+    later(context, () => processQueue(3000));
+    return eph(`✅ Du bist jetzt **Manager**! Die Spieler-Rolle wurde entfernt.\nSuch dir jetzt deinen Verein aus${cfg.channels.reg ? ` in <#${cfg.channels.reg}>` : ""}.`);
   }
 
   // --- Regelwerk ---
@@ -470,5 +459,5 @@ async function doBan(i, context, rest, note) {
     if (partner) users.push(partner);
   }
   later(context, () => B.ban(users, Number(r), Number(d), uidOf(i), note));
-  return reply(i, { content: `✅ ${users.map((x) => `<@${x}>`).join(" und ")} ${users.length > 1 ? "sind" : "ist"} für **${d} ${d === "1" ? "Tag" : "Tage"}** gesperrt. Die Sperrliste wird aktualisiert, und die Betroffenen bekommen eine Direktnachricht.`, components: [] });
+  return reply(i, { content: `✅ ${users.map((x) => `<@${x}>`).join(" und ")} ${users.length > 1 ? "sind" : "ist"} für **${d} ${d === "1" ? "Tag" : "Tage"}** gesperrt. Die Sperrliste wird aktualisiert, und die Betroffenen werden im Benachrichtigungs-Kanal markiert.`, components: [] });
 }

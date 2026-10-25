@@ -1,6 +1,7 @@
 // Sperrliste: Personen sperren, automatisch ablaufen lassen.
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
-import { sendMessage, sendDM, upsertMessage, pinMessage } from "./discord.mjs";
+import { sendMessage, upsertMessage, pinMessage } from "./discord.mjs";
+import { notify } from "./notify.mjs";
 import { BAN_REASONS, COLOR, flagOf } from "./data.mjs";
 import * as V from "./views.mjs";
 
@@ -35,7 +36,7 @@ export async function ban(users, reason, days, byId, note = "") {
     }
   }, { initial: [] });
   for (const u of users) {
-    await sendDM(u, { embeds: [{ color: COLOR, title: "🚫 Du wurdest gesperrt", description: `Du bist für **${days} ${days === 1 ? "Tag" : "Tage"}** gesperrt – bis <t:${unix(until)}:F>.\n**Grund:** ${BAN_REASONS[reason]}\n\nIn dieser Zeit kann deine Mannschaft an keinem Cup teilnehmen. Fragen bitte an die Turnierleitung.` }] });
+    await notify(u, { embeds: [{ color: COLOR, title: "🚫 Du wurdest gesperrt", description: `Du bist für **${days} ${days === 1 ? "Tag" : "Tage"}** gesperrt – bis <t:${unix(until)}:F>.\n**Grund:** ${BAN_REASONS[reason]}\n\nIn dieser Zeit kann deine Mannschaft an keinem Cup teilnehmen. Fragen bitte an die Turnierleitung.` }] });
   }
   if (cfg.channels.log) await sendMessage(cfg.channels.log, { content: `🚫 ${users.map((u) => `<@${u}>`).join(" ")} gesperrt für **${days} ${days === 1 ? "Tag" : "Tage"}** von <@${byId}> – ${BAN_REASONS[reason]}${note ? `\n> Notiz: ${note}` : ""}` });
   await refreshBanPanel();
@@ -46,7 +47,7 @@ export async function lift(user, byId) {
   const { result } = await mutate("bans", (list) => { const b = list.find((x) => x.user === user && x.until > Date.now()); if (!b) return false; b.until = Date.now() - 1; b.liftedBy = byId; return true; }, { initial: [] });
   if (!result) return false;
   if (cfg.channels.log) await sendMessage(cfg.channels.log, { content: `✅ Sperre von <@${user}> aufgehoben von <@${byId}>.` });
-  await sendDM(user, { embeds: [{ color: COLOR, title: "✅ Sperre aufgehoben", description: "Deine Sperre wurde von der Turnierleitung aufgehoben. Ihr könnt euch wieder zu Cups anmelden." }] });
+  await notify(user, { embeds: [{ color: COLOR, title: "✅ Sperre aufgehoben", description: "Deine Sperre wurde von der Turnierleitung aufgehoben. Ihr könnt euch wieder zu Cups anmelden." }] });
   await refreshBanPanel();
   return true;
 }
@@ -65,7 +66,7 @@ export async function expireBans(now = Date.now()) {
   for (const b of expired) {
     if (b.liftedBy) continue;
     if (cfg.channels.log) await sendMessage(cfg.channels.log, { content: `⏱️ Sperre von <@${b.user}> ist abgelaufen und wurde automatisch entfernt.` });
-    await sendDM(b.user, { embeds: [{ color: COLOR, title: "⏱️ Sperre abgelaufen", description: "Deine Sperre ist abgelaufen. Ihr könnt euch wieder zu Cups anmelden." }] });
+    await notify(b.user, { embeds: [{ color: COLOR, title: "⏱️ Sperre abgelaufen", description: "Deine Sperre ist abgelaufen. Ihr könnt euch wieder zu Cups anmelden." }] });
   }
   await refreshBanPanel();
 }

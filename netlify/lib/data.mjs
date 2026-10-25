@@ -51,6 +51,7 @@ export const BASE_ROLES = ["Turnierleitung", "Manager", "Spieler"];
 export const BASE_CHANNEL_TYPES = {
   welcome: "Willkommen",
   roles: "Rollenauswahl",
+  notify: "Benachrichtigungen",
   rules: "Regelwerk",
   reg: "Team-registrieren",
   team: "Meine-Mannschaft",
@@ -71,6 +72,7 @@ export const CHANNEL_TYPES = {
   rules: "Regelwerk",
   welcome: "Willkommen",
   roles: "Rollenauswahl",
+  notify: "Benachrichtigungen",
   ko: "KO-Phase",
   kor: "KO-Phase · Ergebnisse",
   log: "Turnierleitung (Log)",

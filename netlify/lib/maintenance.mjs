@@ -1,6 +1,7 @@
 // Hintergrund-Aufgaben: Manager-Rolle ↔ Spieler-Rolle abgleichen, 7-Tage-Inaktivität.
 import { get, set, mutate, getConfig, getClubs } from "./store.mjs";
-import { listMembers, sendDM, sendMessage } from "./discord.mjs";
+import { listMembers, sendMessage } from "./discord.mjs";
+import { notify } from "./notify.mjs";
 import { welcomePost } from "./views.mjs";
 import { enqueue } from "./roles.mjs";
 import { releaseClub, refreshOverview } from "./flow.mjs";
@@ -54,9 +55,9 @@ export async function dailyInactivity(now = Date.now()) {
     const users = [c.manager, c.co].filter(Boolean);
     if (days >= INACTIVE_DAYS) {
       await releaseClub(name, { reason: `${INACTIVE_DAYS} Tage keinen Cup gespielt` });
-      for (const u of users) await sendDM(u, { embeds: [{ color: COLOR, title: `${flagOf(name)} Mannschaft zurückgesetzt`, description: `Ihr habt ${INACTIVE_DAYS} Tage keinen Cup gespielt. **${name}** ist jetzt wieder frei. Du kannst dir jederzeit eine neue Mannschaft nehmen.` }] });
+      await notify(users, { embeds: [{ color: COLOR, title: `${flagOf(name)} Mannschaft zurückgesetzt`, description: `Ihr habt ${INACTIVE_DAYS} Tage keinen Cup gespielt. **${name}** ist jetzt wieder frei. Du kannst dir jederzeit eine neue Mannschaft nehmen.` }] });
     } else if (days === INACTIVE_DAYS - 2 || days === INACTIVE_DAYS - 1) {
-      for (const u of users) await sendDM(u, { embeds: [{ color: COLOR, title: `⚠️ ${days === INACTIVE_DAYS - 2 ? "Erinnerung" : "Letzte Warnung"}: ${name}`, description: `Ihr habt seit **${days} Tagen** keinen Cup gespielt. ${days === INACTIVE_DAYS - 2 ? "In 2 Tagen" : "Morgen"} wird eure Mannschaft zurückgesetzt und ist dann für andere frei. Spielt einen Cup mit, dann startet der Zähler neu.` }] });
+      await notify(users, { embeds: [{ color: COLOR, title: `⚠️ ${days === INACTIVE_DAYS - 2 ? "Erinnerung" : "Letzte Warnung"}: ${name}`, description: `Ihr habt seit **${days} Tagen** keinen Cup gespielt. ${days === INACTIVE_DAYS - 2 ? "In 2 Tagen" : "Morgen"} wird eure Mannschaft zurückgesetzt und ist dann für andere frei. Spielt einen Cup mit, dann startet der Zähler neu.` }] });
     }
   }
 }

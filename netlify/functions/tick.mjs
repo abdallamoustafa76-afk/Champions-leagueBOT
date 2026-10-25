@@ -4,6 +4,7 @@ import { syncManagerRoles, dailyInactivity, welcomeNewMembers } from "../lib/mai
 import { listMembers } from "../lib/discord.mjs";
 import { processQueue } from "../lib/roles.mjs";
 import { expireBans } from "../lib/bans.mjs";
+import { runAutoDelete } from "../lib/notify.mjs";
 
 export default async () => {
   const start = Date.now();
@@ -19,6 +20,7 @@ export default async () => {
   await step("Willkommen", () => welcomeNewMembers(members));
   await step("Inaktivität", () => dailyInactivity());
   await step("Sperren", () => expireBans());
+  await step("Benachrichtigungen löschen", () => runAutoDelete());
   await step("Rollen-Warteschlange", () => processQueue(Math.max(3000, 26000 - (Date.now() - start))));
 };
 

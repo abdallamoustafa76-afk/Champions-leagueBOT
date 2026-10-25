@@ -46,7 +46,7 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
    **Wichtig:** Rolle des Bots in der Rollenliste **über** all diese Rollen ziehen.
 2. Kanäle verknüpfen – für jeden Kanal einmal:
    `/cl-einrichten kanal typ: Team-registrieren kanal: #📝・𝓣𝓮𝓪𝓶-𝓻𝓮𝓰𝓲𝓼𝓽𝓻𝓲𝓮𝓻𝓮𝓷`
-   (ebenso Willkommen, Rollenauswahl, Regelwerk, Meine-Mannschaft, Mannschaftsübersicht, Live-Spielplan, Hall-of-Fame, KO-Phase, KO-Phase · Ergebnisse, Sperrliste, Turnierleitung (Log))
+   (ebenso Willkommen, Rollenauswahl, Benachrichtigungen, Regelwerk, Meine-Mannschaft, Mannschaftsübersicht, Live-Spielplan, Hall-of-Fame, KO-Phase, KO-Phase · Ergebnisse, Sperrliste, Turnierleitung (Log))
    Gruppen: `/cl-einrichten gruppe gruppe: Gruppe A art: Gruppenkanal kanal: #⚽・𝓖𝓻𝓾𝓹𝓹𝓮-𝓐` und `… art: Ergebniskanal kanal: #📋・𝓐-𝓔𝓻𝓰𝓮𝓫𝓷𝓲𝓼𝓼𝓮` (für A–H)
 3. `/cl-einrichten panels` → postet die Panels in Regelwerk, Rollenauswahl, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste.
 4. `/cl-einrichten status` → zeigt, was noch fehlt.
@@ -60,6 +60,7 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 |---|---|---|
 | 👋 Willkommen | Ansehen ✅, Schreiben ❌ | alle |
 | 🎭 Rollenauswahl | Ansehen ✅, Schreiben ❌ | alle |
+| 🔔 Benachrichtigungen | Ansehen ✅, Schreiben ❌ | alle |
 | 📜 Regelwerk | Ansehen ✅, Schreiben ❌ | alle |
 | 📝 Team-registrieren | Ansehen ❌ | Manager, Turnierleitung, Bot |
 | 🛡️ Meine-Mannschaft | Ansehen ❌ | Manager, Turnierleitung, Bot |
@@ -76,16 +77,21 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 
 ## Ablauf
 
-- **Manager-Rolle** vergibt die Turnierleitung von Hand. Der Bot entfernt dann innerhalb einer Minute die Rolle Spieler (und gibt sie zurück, wenn Manager weggenommen wird – der Verein geht an den Co-VM oder wird frei).
+- **Manager-Rolle** holt man sich selbst in der Rollenauswahl (oder die Turnierleitung vergibt sie von Hand). Der Bot entfernt dann die Rolle Spieler (und gibt sie zurück, wenn Manager weggenommen wird – der Verein geht an den Co-VM oder wird frei).
 - **Team-registrieren:** Liga → Verein → EA-Club. Jeder Verein nur einmal.
 - **Meine-Mannschaft:** Co-VM hinzufügen/entfernen (bekommt Manager, verliert Spieler), EA-Club ändern, verlassen, löschen.
-- **7-Tage-Regel:** Warnung per Direktnachricht an Tag 5 und 6, nach 7 Tagen ohne Cup wird der Verein frei.
+- **7-Tage-Regel:** Warnung im Benachrichtigungs-Kanal an Tag 5 und 6, nach 7 Tagen ohne Cup wird der Verein frei.
 - **Cup-Tag:** Anmeldung im Tageskanal → 19:00 Auslosung, Gruppen-Rollen, Check-in im Gruppenkanal (Warteliste checkt im Tageskanal ein) → 19:55 Nachrücker bzw. 0:3-Wertung → Spieltage, beide Mannschaften melden das Ergebnis → K.-o. mit Runden-Rollen → Finale + Spiel um Platz 3 → Siegerbild in der Hall of Fame.
+
+## Benachrichtigungen
+
+- Der Bot schickt **keine Direktnachrichten**. Stattdessen markiert er die Person im Kanal 🔔 Benachrichtigungen – bei Sperre, aufgehobener oder abgelaufener Sperre, Inaktivitäts-Warnung (Tag 5 und 6) und Reset nach 7 Tagen.
+- Jede Benachrichtigung wird **nach 1 Stunde automatisch gelöscht**, damit der Kanal sauber bleibt.
 
 ## Willkommen & Rollenauswahl
 
 - Neue Mitglieder werden im Willkommenskanal mit Ping und Logo begrüßt (der Bot prüft jede Minute, ob jemand neu ist – die Begrüßung kommt also bis zu 1 Minute nach dem Beitritt). Beim allerersten Durchlauf merkt sich der Bot nur alle vorhandenen Mitglieder und begrüßt niemanden.
-- In der Rollenauswahl gibt es **Spieler werden** (Rolle sofort) und **Manager werden** (Anfrage an die Turnierleitung im Log-Kanal mit Annehmen/Ablehnen; beim Annehmen bekommt die Person Manager, verliert Spieler und erhält eine Direktnachricht).
+- In der Rollenauswahl gibt es **Spieler werden** und **Manager werden** – beide Rollen gibt es sofort. Wer Manager wird, verliert automatisch die Spieler-Rolle. Gesperrte Personen können nicht Manager werden.
 - Wenn bisher ein anderer Bot (z. B. Galaxy) begrüßt, dort die Begrüßung ausschalten, sonst kommen zwei Nachrichten.
 
 ## Regelwerk
@@ -107,7 +113,7 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
 - **Person sperren** (nur Turnierleitung & Moderator): Person → Grund → Dauer (Standard 7 Tage) → optional Notiz. Gehört die Person zu einer Mannschaft, kann der Partner (Manager/Co-VM) gleich mitgesperrt werden.
 - Gesperrt wird die **Person**: Die Sperre gilt auch, wenn sie den Verein wechselt. Eine Mannschaft kann sich nicht anmelden, solange ihr Manager oder Co-VM gesperrt ist, und gesperrte Personen können nicht Co-VM werden.
-- Betroffene bekommen eine Direktnachricht, die Turnierleitung einen Eintrag im Log.
+- Betroffene werden im Benachrichtigungs-Kanal markiert (Nachricht verschwindet nach 1 Stunde), die Turnierleitung bekommt einen Eintrag im Log.
 - Abgelaufene Sperren werden automatisch entfernt; **Sperre aufheben** geht jederzeit per Button.
 - In einen laufenden Cup greift der Bot nicht ein – fehlende Ergebnisse trägt die Turnierleitung mit `/cl-admin ergebnis` ein.
 
