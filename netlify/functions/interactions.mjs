@@ -105,7 +105,7 @@ async function setup(i, context, cfg) {
     });
   }
   if (sub.name === "panels") {
-    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); return "✅ Panels in Regelwerk, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste gepostet bzw. aktualisiert."; });
+    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste gepostet bzw. aktualisiert."; });
   }
   if (sub.name === "status") {
     const lines = Object.entries(CHANNEL_TYPES).map(([k, n]) => `${cfg.channels?.[k] ? "✅" : "▫️"} **${n}**${cfg.channels?.[k] ? ` → <#${cfg.channels[k]}>` : ""}`);
@@ -208,6 +208,34 @@ async function resultOpen(i) {
 async function component(i, context) {
   const cfg = await getConfig();
   const id = i.data.custom_id, uid = uidOf(i);
+
+  // --- Rollenauswahl ---
+  if (id === "role_player") {
+    if (hasRole(i, cfg.roles.manager)) return eph("Du bist Manager – die Spieler-Rolle brauchst du nicht zusätzlich.");
+    if (hasRole(i, cfg.roles.spieler)) return eph("Du hast die Rolle **Spieler** bereits.");
+    await enqueue([{ u: uid, add: [cfg.roles.spieler], why: "Rollenauswahl: Spieler" }]);
+    later(context, () => processQueue(3000));
+    return eph("✅ Du hast jetzt die Rolle **Spieler**. Viel Spaß beim Champions League Cup!");
+  }
+  if (id === "role_manager") {
+    if (hasRole(i, cfg.roles.manager)) return eph("Du bist bereits **Manager**.");
+    const b = await B.findBan([uid]);
+    if (b) return eph(`❌ Du ${banText(b).replace(/^ist/, "bist")} und kannst gerade keine Manager-Anfrage stellen.`);
+    const { result: isNew } = await mutate("mreq", (r) => { if (r[uid]) return false; r[uid] = Date.now(); return true; }, { initial: {} });
+    if (!isNew) return eph("📨 Deine Manager-Anfrage liegt der Turnierleitung schon vor.");
+    const rulesOk = await F.rulesAccepted(uid);
+    later(context, async () => { const ch = cfg.channels.log; if (ch) await (await import("../lib/discord.mjs")).sendMessage(ch, V.managerRequest(uid, rulesOk)); });
+    return eph("📨 Deine Manager-Anfrage wurde an die Turnierleitung geschickt. Du bekommst eine Direktnachricht, sobald sie entschieden hat.");
+  }
+  if (id.startsWith("mreq_ok:") || id.startsWith("mreq_no:")) {
+    if (!isStaff(i, cfg)) return eph("Das darf nur die Turnierleitung.");
+    const target = id.split(":")[1], ok = id.startsWith("mreq_ok:");
+    await mutate("mreq", (r) => { delete r[target]; }, { initial: {} });
+    const { sendDM } = await import("../lib/discord.mjs");
+    if (ok) await enqueue([{ u: target, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: "Manager-Anfrage angenommen" }]);
+    later(context, () => sendDM(target, { embeds: [{ color: COLOR, title: ok ? "👔 Du bist jetzt Manager!" : "Manager-Anfrage abgelehnt", description: ok ? `Such dir jetzt deinen Verein aus${cfg.channels.reg ? ` in <#${cfg.channels.reg}>` : ""}. Viel Erfolg!` : "Deine Manager-Anfrage wurde abgelehnt. Bei Fragen melde dich bei der Turnierleitung." }] }));
+    return { type: 7, data: { ...V.managerRequest(target, await F.rulesAccepted(target), ok ? "ok" : "no", uid), allowed_mentions: { parse: [] } } };
+  }
 
   // --- Regelwerk ---
   if (id === "rules_ok") {

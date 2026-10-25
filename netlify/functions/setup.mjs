@@ -18,7 +18,7 @@ const COMMANDS = [
         { type: 7, name: "kanal", description: "Der Discord-Kanal", required: true, channel_types: [0, 5] },
       ] },
       { type: 1, name: "rollen", description: "Rollen verknüpfen bzw. fehlende anlegen" },
-      { type: 1, name: "panels", description: "Panels posten: Regelwerk, Team-registrieren, Meine-Mannschaft, Übersicht, Sperrliste" },
+      { type: 1, name: "panels", description: "Panels posten: Regelwerk, Rollenauswahl, Registrieren, Meine Mannschaft, Übersicht, Sperrliste" },
       { type: 1, name: "status", description: "Zeigen, was schon eingerichtet ist" },
     ],
   },

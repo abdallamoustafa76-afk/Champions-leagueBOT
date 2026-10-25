@@ -49,6 +49,8 @@ export const BASE_ROLES = ["Turnierleitung", "Manager", "Spieler"];
 /** Kanal-Typen für /cl-einrichten kanal */
 /** Kanal-Typen für /cl-einrichten kanal (max. 25 Auswahlmöglichkeiten → Gruppen separat) */
 export const BASE_CHANNEL_TYPES = {
+  welcome: "Willkommen",
+  roles: "Rollenauswahl",
   rules: "Regelwerk",
   reg: "Team-registrieren",
   team: "Meine-Mannschaft",
@@ -67,6 +69,8 @@ export const CHANNEL_TYPES = {
   live: "Live-Spielplan",
   hof: "Hall-of-Fame",
   rules: "Regelwerk",
+  welcome: "Willkommen",
+  roles: "Rollenauswahl",
   ko: "KO-Phase",
   kor: "KO-Phase · Ergebnisse",
   log: "Turnierleitung (Log)",

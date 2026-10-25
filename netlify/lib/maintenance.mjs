@@ -1,6 +1,7 @@
 // Hintergrund-Aufgaben: Manager-Rolle ↔ Spieler-Rolle abgleichen, 7-Tage-Inaktivität.
 import { get, set, mutate, getConfig, getClubs } from "./store.mjs";
-import { listMembers, sendDM } from "./discord.mjs";
+import { listMembers, sendDM, sendMessage } from "./discord.mjs";
+import { welcomePost } from "./views.mjs";
 import { enqueue } from "./roles.mjs";
 import { releaseClub, refreshOverview } from "./flow.mjs";
 import { viennaParts, todayKey, daysBetween } from "./time.mjs";
@@ -11,11 +12,11 @@ import { INACTIVE_DAYS, COLOR, flagOf } from "./data.mjs";
  * Wem die Manager-Rolle weggenommen wird, bekommt die Spieler-Rolle zurück –
  * sein Verein geht an den Co-VM (oder wird frei), als Co-VM wird er ausgetragen.
  */
-export async function syncManagerRoles() {
+export async function syncManagerRoles(members) {
   const cfg = await getConfig();
   const M = cfg.roles.manager, P = cfg.roles.spieler;
   if (!M || !P) return;
-  const members = await listMembers();
+  members = members ?? (await listMembers());
   if (!members) return; // „Server Members Intent“ nicht aktiv
   const byId = new Map(members.map((m) => [m.user.id, m]));
   const now = new Set(members.filter((m) => m.roles.includes(M)).map((m) => m.user.id));
@@ -58,4 +59,17 @@ export async function dailyInactivity(now = Date.now()) {
       for (const u of users) await sendDM(u, { embeds: [{ color: COLOR, title: `⚠️ ${days === INACTIVE_DAYS - 2 ? "Erinnerung" : "Letzte Warnung"}: ${name}`, description: `Ihr habt seit **${days} Tagen** keinen Cup gespielt. ${days === INACTIVE_DAYS - 2 ? "In 2 Tagen" : "Morgen"} wird eure Mannschaft zurückgesetzt und ist dann für andere frei. Spielt einen Cup mit, dann startet der Zähler neu.` }] });
     }
   }
+}
+
+/** Neue Mitglieder begrüßen (Mitgliederliste wird jede Minute verglichen) */
+export async function welcomeNewMembers(members) {
+  const cfg = await getConfig();
+  if (!members) return;
+  const ids = members.filter((m) => !m.user.bot).map((m) => m.user.id);
+  const known = await get("knownMembers");
+  await set("knownMembers", ids);
+  if (!known || !cfg.channels.welcome) return; // erster Lauf: nur merken, niemanden begrüßen
+  const old = new Set(known);
+  const fresh = ids.filter((id) => !old.has(id)).slice(0, 10);
+  for (const id of fresh) await sendMessage(cfg.channels.welcome, welcomePost(id, cfg.channels));
 }

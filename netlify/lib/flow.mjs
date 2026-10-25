@@ -6,7 +6,6 @@ import * as T from "./tournament.mjs";
 import * as V from "./views.mjs";
 import { DAYS, ROUND_ROLES, RULES_VERSION, flagOf } from "./data.mjs";
 import { viennaParts, viennaAt, shortDate, todayKey } from "./time.mjs";
-import { hallOfFameImage } from "./image.mjs";
 
 // ---------- Hilfen ----------
 export function clubOfUser(clubs, uid) {
@@ -57,6 +56,13 @@ export async function refreshRulesPanel() {
   const count = Object.values((await get("rules")) || {}).filter((v) => v === RULES_VERSION).length;
   const id = await upsertMessage(cfg.channels.rules, p.rules, V.rulesPanel(count));
   if (id && id !== p.rules) { await savePanel("rules", id); await pinMessage(cfg.channels.rules, id); }
+}
+
+export async function refreshRolesPanel() {
+  const cfg = await getConfig(); if (!cfg.channels.roles) return;
+  const p = await panels();
+  const id = await upsertMessage(cfg.channels.roles, p.roles, V.rolesPanel());
+  if (id && id !== p.roles) { await savePanel("roles", id); await pinMessage(cfg.channels.roles, id); }
 }
 
 /** Verein freigeben (Verlassen, Löschen, Inaktivität, Manager-Rolle weg). Co-VM übernimmt beim Verlassen. */
@@ -383,6 +389,7 @@ async function finishCup(t, cfg) {
   await refreshSignup(t);
   if (cfg.channels.hof) {
     const names = await displayNames(t.podium.map((c) => (t.members[c] || [])[0]).filter(Boolean));
+    const { hallOfFameImage } = await import("./image.mjs"); // erst hier laden, damit der Bot auch ohne Bild-Modul startet
     const img = await hallOfFameImage({
       podium: t.podium.map((c) => ({ club: c, mgr: names[(t.members[c] || [])[0]] || "" })),
       title: t.name, sub: `${t.fmt}er-Format · Finale: ${finalLine}`, seed: Date.now() % 1000,

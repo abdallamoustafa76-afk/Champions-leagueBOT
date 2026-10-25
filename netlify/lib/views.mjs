@@ -466,3 +466,51 @@ export function rulesPanel(count) {
 }
 
 export const videoMinuteModal = (limit) => ({ type: 9, data: { custom_id: "vid_min", title: "Größenvideo anfordern", components: [row({ type: 4, custom_id: "min", label: `Aktuelle Spielminute (nur bis zur ${limit}.)`, style: 1, required: true, max_length: 3, placeholder: "z. B. 23" })] } });
+
+// ---------- Willkommen & Rollenauswahl ----------
+export function welcomePost(uid, ch) {
+  const link = (k, name) => (ch[k] ? `<#${ch[k]}>` : name);
+  return {
+    content: `<@${uid}>`,
+    allowed_mentions: { users: [uid] },
+    embeds: [{
+      color: COLOR,
+      title: "⭐ Willkommen beim Champions League Cup – dein Weg zum Titel beginnt jetzt!",
+      thumbnail: { url: `${site()}/logo.jpg` },
+      description:
+        `Schön, dass du da bist, <@${uid}>!\n\n` +
+        "Die Vereine stehen bereit, das Flutlicht ist an – jetzt beginnt dein Weg durch den Champions League Cup. Erkunde den Server, werde Teil der Community und kämpfe mit deiner Mannschaft um den Titel.\n\n" +
+        `Dein erster Schritt: Lies das ${link("rules", "Regelwerk")} und wähle danach in ${link("roles", "der Rollenauswahl")} deine Rolle.`,
+      fields: [
+        { name: "👔 Als Manager", value: "Übernimm einen von 128 Vereinen, melde deine Mannschaft zu den Cups an, ernenne deinen Co-VM und führe deinen Klub bis ins Finale." },
+        { name: "⚽ Als Spieler", value: "Verfolge Anmeldelisten, Live-Spielplan, Ergebnisse und die Hall of Fame – und sei bei jedem Cup-Abend dabei." },
+        { name: "🏆 Bereit für die Königsklasse?", value: "Viel Erfolg dir und deinem Team – vielleicht steht am Ende dein Verein in der Hall of Fame!\n\n**Dein Verein. Dein Team. Dein Weg zum Titel.**" },
+      ],
+    }],
+  };
+}
+
+export function rolesPanel() {
+  return {
+    embeds: [{
+      color: COLOR,
+      title: "🎭 ROLLENAUSWAHL",
+      thumbnail: { url: `${site()}/logo.jpg` },
+      description: "Wähle hier deine Rolle für den Champions League Cup.",
+      fields: [
+        { name: "👔 Manager", value: "Du willst einen Verein übernehmen und an den Cups teilnehmen? Stell eine Anfrage – die Turnierleitung schaltet dich frei." },
+        { name: "⚽ Spieler", value: "Du spielst in einer Mannschaft mit oder willst alles verfolgen? Die Rolle bekommst du sofort." },
+      ],
+      footer: { text: "Wer Manager wird, verliert automatisch die Spieler-Rolle." },
+    }],
+    components: [row(btn("Manager werden", "role_manager", 1, { emoji: { name: "👔" } }), btn("Spieler werden", "role_player", 3, { emoji: { name: "⚽" } }))],
+  };
+}
+
+export function managerRequest(uid, rulesOk, state = "offen", byId = null) {
+  const status = { offen: "", ok: `\n\n✅ **Angenommen** von <@${byId}> – Rolle Manager vergeben, Spieler entfernt.`, no: `\n\n❌ **Abgelehnt** von <@${byId}>.` }[state];
+  return {
+    embeds: [{ color: COLOR, title: "👔 Manager-Anfrage", description: `<@${uid}> möchte Manager werden.\nRegelwerk akzeptiert: ${rulesOk ? "✅" : "❌ noch nicht"}${status}` }],
+    components: state === "offen" ? [row(btn("Annehmen", `mreq_ok:${uid}`, 3, { emoji: { name: "✅" } }), btn("Ablehnen", `mreq_no:${uid}`, 4, { emoji: { name: "❌" } }))] : [],
+  };
+}

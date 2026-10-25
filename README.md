@@ -46,9 +46,9 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
    **Wichtig:** Rolle des Bots in der Rollenliste **über** all diese Rollen ziehen.
 2. Kanäle verknüpfen – für jeden Kanal einmal:
    `/cl-einrichten kanal typ: Team-registrieren kanal: #📝・𝓣𝓮𝓪𝓶-𝓻𝓮𝓰𝓲𝓼𝓽𝓻𝓲𝓮𝓻𝓮𝓷`
-   (ebenso Regelwerk, Meine-Mannschaft, Mannschaftsübersicht, Live-Spielplan, Hall-of-Fame, KO-Phase, KO-Phase · Ergebnisse, Sperrliste, Turnierleitung (Log))
+   (ebenso Willkommen, Rollenauswahl, Regelwerk, Meine-Mannschaft, Mannschaftsübersicht, Live-Spielplan, Hall-of-Fame, KO-Phase, KO-Phase · Ergebnisse, Sperrliste, Turnierleitung (Log))
    Gruppen: `/cl-einrichten gruppe gruppe: Gruppe A art: Gruppenkanal kanal: #⚽・𝓖𝓻𝓾𝓹𝓹𝓮-𝓐` und `… art: Ergebniskanal kanal: #📋・𝓐-𝓔𝓻𝓰𝓮𝓫𝓷𝓲𝓼𝓼𝓮` (für A–H)
-3. `/cl-einrichten panels` → postet die Panels in Regelwerk, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste.
+3. `/cl-einrichten panels` → postet die Panels in Regelwerk, Rollenauswahl, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste.
 4. `/cl-einrichten status` → zeigt, was noch fehlt.
 5. Wochenplan, für jeden Tag einmal:
    `/cl-zeitplan setzen tag: Montag kanal: #🗓️・𝓜𝓸𝓷𝓽𝓪𝓰 anpfiff: 20:00`
@@ -58,6 +58,8 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 
 | Kanal | @everyone | Wer sieht ihn |
 |---|---|---|
+| 👋 Willkommen | Ansehen ✅, Schreiben ❌ | alle |
+| 🎭 Rollenauswahl | Ansehen ✅, Schreiben ❌ | alle |
 | 📜 Regelwerk | Ansehen ✅, Schreiben ❌ | alle |
 | 📝 Team-registrieren | Ansehen ❌ | Manager, Turnierleitung, Bot |
 | 🛡️ Meine-Mannschaft | Ansehen ❌ | Manager, Turnierleitung, Bot |
@@ -79,6 +81,12 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 - **Meine-Mannschaft:** Co-VM hinzufügen/entfernen (bekommt Manager, verliert Spieler), EA-Club ändern, verlassen, löschen.
 - **7-Tage-Regel:** Warnung per Direktnachricht an Tag 5 und 6, nach 7 Tagen ohne Cup wird der Verein frei.
 - **Cup-Tag:** Anmeldung im Tageskanal → 19:00 Auslosung, Gruppen-Rollen, Check-in im Gruppenkanal (Warteliste checkt im Tageskanal ein) → 19:55 Nachrücker bzw. 0:3-Wertung → Spieltage, beide Mannschaften melden das Ergebnis → K.-o. mit Runden-Rollen → Finale + Spiel um Platz 3 → Siegerbild in der Hall of Fame.
+
+## Willkommen & Rollenauswahl
+
+- Neue Mitglieder werden im Willkommenskanal mit Ping und Logo begrüßt (der Bot prüft jede Minute, ob jemand neu ist – die Begrüßung kommt also bis zu 1 Minute nach dem Beitritt). Beim allerersten Durchlauf merkt sich der Bot nur alle vorhandenen Mitglieder und begrüßt niemanden.
+- In der Rollenauswahl gibt es **Spieler werden** (Rolle sofort) und **Manager werden** (Anfrage an die Turnierleitung im Log-Kanal mit Annehmen/Ablehnen; beim Annehmen bekommt die Person Manager, verliert Spieler und erhält eine Direktnachricht).
+- Wenn bisher ein anderer Bot (z. B. Galaxy) begrüßt, dort die Begrüßung ausschalten, sonst kommen zwei Nachrichten.
 
 ## Regelwerk
 
