@@ -1,0 +1,468 @@
+// Alle Discord-Ansichten (Embeds, Buttons, Formulare). Alle Ränder in Blau.
+import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS, BAN_DEFAULT_DAYS, VIDEO_LIMIT, VIDEO_WINDOW_MIN, RULES, flagOf, club as clubInfo, clubIndex } from "./data.mjs";
+import { fmtOf, nextFmt, standings, currentMatches, winner, koRoundName } from "./tournament.mjs";
+
+const FOOTER = { text: "Champions League Bot" };
+export const esc = (s) => String(s).replace(/([*_`~|\\>])/g, "\\$1");
+const unix = (ms) => Math.floor(ms / 1000);
+const hhmm = (ms) => `<t:${unix(ms)}:t>`;
+const site = () => process.env.SITE_URL || process.env.URL || "";
+const btn = (label, custom_id, style = 2, extra = {}) => ({ type: 2, style, label, custom_id, ...extra });
+const row = (...components) => ({ type: 1, components });
+const ping = (ids) => ids.map((id) => `<@${id}>`).join(" ");
+export const teamLine = (c) => `${flagOf(c)} **${esc(c)}**`;
+const pad = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
+
+// ---------- Team registrieren ----------
+export function regPanel(clubs) {
+  const taken = Object.keys(clubs).length;
+  const lines = LEAGUES.map((l) => `${l.flag} **${l.name}** – ${l.clubs.filter((c) => !clubs[c]).length} frei`);
+  return {
+    embeds: [
+      { color: COLOR, image: { url: `${site()}/banner-registrieren.jpg` } },
+      {
+        color: COLOR,
+        description:
+          "Wähle eine Liga und deine Mannschaft. Jede Mannschaft gibt es nur einmal – wer zuerst kommt, wird Manager.\n\n" +
+          `**Vergeben:** ${taken}/${CLUBS.length} · **Frei:** ${CLUBS.length - taken}\n\n` + lines.join("\n"),
+        footer: FOOTER,
+      },
+    ],
+    components: [row(btn("Mannschaft registrieren", "reg_start", 1, { emoji: { name: "👕" } }))],
+  };
+}
+
+export function regLeagues(clubs) {
+  const buttons = LEAGUES.map((l, i) => btn(l.name, `reg_league:${i}`, 1, { emoji: { name: l.flag }, disabled: !l.clubs.some((c) => !clubs[c]) }));
+  return { content: "**Schritt 1 · Liga wählen**", embeds: [], components: [row(...buttons.slice(0, 5)), row(...buttons.slice(5, 10))] };
+}
+
+export function regClubs(clubs, li) {
+  const l = LEAGUES[li];
+  const buttons = l.clubs.map((c) => btn(c.slice(0, 80), `reg_club:${clubIndex(c)}`, 2, { emoji: { name: l.flag }, disabled: !!clubs[c] }));
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) rows.push(row(...buttons.slice(i, i + 5)));
+  rows.push(row(btn("Zurück", "reg_start", 2, { emoji: { name: "↩️" } })));
+  const free = l.clubs.filter((c) => !clubs[c]).length;
+  return { content: `**${l.flag} Schritt 2 · ${l.name}** – ${free} von ${l.clubs.length} frei (ausgegraut = schon vergeben)`, embeds: [], components: rows.slice(0, 5) };
+}
+
+export function eaModal(customId, title, value = "") {
+  return {
+    type: 9,
+    data: {
+      custom_id: customId, title,
+      components: [row({ type: 4, custom_id: "ea", label: "EA-FC-Clubname", style: 1, required: true, min_length: 3, max_length: 40, value: value || undefined, placeholder: "So wie er in EA FC Pro Clubs heißt" })],
+    },
+  };
+}
+
+export function newManagerPost(c, userId) {
+  return { embeds: [{ color: COLOR, description: `${flagOf(c)} **Neuer Manager!**\n<@${userId}> übernimmt **${esc(c)}** (${clubInfo(c).league})` }] };
+}
+export function freeAgainPost(c, reason) {
+  return { embeds: [{ color: COLOR, description: `${flagOf(c)} **Mannschaft wieder frei!**\n**${esc(c)}** (${clubInfo(c).league}) sucht einen neuen Manager.${reason ? `\n-# ${reason}` : ""}` }] };
+}
+
+// ---------- Meine Mannschaft ----------
+export function teamPanel() {
+  return {
+    embeds: [{ color: COLOR, title: "🛡️ Meine Mannschaft", description: "Hier verwaltest du deine Mannschaft: Co-VM, EA-Club, verlassen oder löschen.\nDas Fenster kann nur der jeweilige Manager sehen.", footer: FOOTER }],
+    components: [row(btn("Meine Mannschaft öffnen", "team_open", 1, { emoji: { name: "🛡️" } }))],
+  };
+}
+
+export function teamDetail(c, data, role, todayDays) {
+  const left = Math.max(0, 7 - todayDays);
+  const bar = "🟩".repeat(Math.min(7, todayDays)).replace(/🟩/g, todayDays >= 5 ? "🟨" : "🟩") + "⬛".repeat(left);
+  return {
+    content: "",
+    embeds: [{
+      color: COLOR,
+      title: `${flagOf(c)} ${c.toUpperCase()}`,
+      description: `${clubInfo(c).league}${role === "co" ? " · Du bist **Co-VM**" : ""}`,
+      fields: [
+        { name: "Manager", value: `<@${data.manager}>`, inline: true },
+        { name: "Co-VM", value: data.co ? `<@${data.co}>` : "–", inline: true },
+        { name: "EA-Club", value: esc(data.ea || "–"), inline: true },
+        { name: "Aktivität", value: `${todayDays === 0 ? "**Aktiv** · heute gespielt" : `${todayDays >= 5 ? "**Achtung**" : "**Aktiv**"} · zuletzt gespielt vor ${todayDays} ${todayDays === 1 ? "Tag" : "Tagen"}`}\n${bar}\nNoch ${left} ${left === 1 ? "Tag" : "Tage"} bis zum Reset`, inline: false },
+        { name: "Cups", value: String(data.cups ?? 0), inline: true },
+        { name: "Titel", value: String(data.titles ?? 0), inline: true },
+      ],
+    }],
+    components: role === "manager"
+      ? [
+          row(btn("Co-VM hinzufügen", "team_co_add", 1, { disabled: !!data.co }), btn("EA-Club ändern", "team_ea", 1)),
+          row(btn("Co-VM entfernen", "team_co_rem", 2, { disabled: !data.co }), btn("Mannschaft verlassen", "team_leave", 4), btn("Mannschaft löschen", "team_del", 4)),
+        ]
+      : [row(btn("EA-Club ändern", "team_ea", 1), btn("Als Co-VM austreten", "team_co_quit", 4))],
+  };
+}
+
+export function coSelect() {
+  return {
+    content: "**Wähle deinen Co-VM.** Er kann die Mannschaft anmelden, einchecken und Ergebnisse melden. Er bekommt die Rolle Manager, die Rolle Spieler wird entfernt.",
+    embeds: [],
+    components: [row({ type: 5, custom_id: "team_co_pick", placeholder: "Mitglied auswählen", min_values: 1, max_values: 1 }), row(btn("Zurück", "team_open"))],
+  };
+}
+
+export function confirmView(text, okId, okLabel) {
+  return { content: `⚠️ ${text}`, embeds: [], components: [row(btn("Abbrechen", "team_open"), btn(okLabel, okId, 4))] };
+}
+
+// ---------- Mannschaftsübersicht ----------
+export function overviewMessages(clubs) {
+  const taken = Object.keys(clubs).length;
+  const leagueEmbed = (l) => {
+    const lines = l.clubs.filter((c) => clubs[c]).map((c) => `**${esc(c)}** · <@${clubs[c].manager}>${clubs[c].co ? ` + <@${clubs[c].co}>` : ""}`);
+    return lines.length ? { color: COLOR, title: `${l.flag} ${l.name} · ${lines.length}/${l.clubs.length}`, description: lines.join("\n") } : null;
+  };
+  const groups = [[0, 1], [2, 3, 4], [5, 6, 7, 8, 9]];
+  const head = { color: COLOR, title: "⭐ MANNSCHAFTSÜBERSICHT", description: `**Übernommen:** ${taken}/${CLUBS.length} · **Frei:** ${CLUBS.length - taken}\n${"▰".repeat(Math.round((taken / CLUBS.length) * 16))}${"▱".repeat(16 - Math.round((taken / CLUBS.length) * 16))}`, footer: { text: "Aktualisiert sich automatisch" } };
+  return groups.map((ids, k) => {
+    const embeds = ids.map((i) => leagueEmbed(LEAGUES[i])).filter(Boolean);
+    if (k === 0) embeds.unshift(head);
+    if (!embeds.length) embeds.push({ color: COLOR, description: "-# Noch keine Mannschaften in diesen Ligen." });
+    return { embeds };
+  });
+}
+
+// ---------- Anmeldeliste ----------
+const SQ = { g: "🟩", y: "🟨", x: "⬛" };
+function formatBlock(n, closed) {
+  const f = fmtOf(n), next = nextFmt(n);
+  const prog = (from, to) => {
+    if (!to) return "Maximales Format erreicht – weitere Mannschaften kommen auf die Warteliste.";
+    const fill = Math.round(((n - from) / (to - from)) * 10);
+    return `${"▰".repeat(fill)}${"▱".repeat(10 - fill)} noch **${to - n} ${to - n === 1 ? "Mannschaft" : "Mannschaften"}** bis zum **${to}er**`;
+  };
+  if (!f) return `**⚠️ Noch kein Format**\nMindestens **8 Mannschaften** nötig, damit der Cup stattfindet.\n${prog(0, 8)}`;
+  const d = FORMATS[f], mixed = new Set(d.g).size > 1;
+  const grid = d.g.map((s, k) => `\`${"ABCDEFGH"[k]}\` ${Array.from({ length: s }, (_, p) => (p < d.top ? SQ.g : p === d.top && d.ex ? SQ.y : SQ.x)).join("")}`);
+  const rows = [];
+  for (let i = 0; i < grid.length; i += 2) rows.push(grid.slice(i, i + 2).join("   "));
+  const rule = d.top === 1 ? `${SQ.g} **Gruppensieger** ${SQ.y} **${d.ex} beste Zweite**` : `${SQ.g} **Platz 1 + 2**${d.ex ? ` ${SQ.y} **${d.ex} beste Dritte**` : ""}`;
+  return `**🏟️ Format: ${f}er**\n**Gruppen:** ${mixed ? d.g.join(" · ") : `${d.g.length} × ${d.g[0]}`}  ·  **Weiter:** ${KO_SIZE[f]} von ${f}  ·  **K.-o. ab:** ${KO_NAME[KO_SIZE[f]]}\n${rows.join("\n")}\n${rule} ${SQ.x} **raus**${mixed && d.ex ? "\n-# Bei unterschiedlich großen Gruppen zählt der Punkteschnitt pro Spiel." : ""}${closed ? "" : "\n" + prog(f, next)}`;
+}
+
+const STATUS = {
+  anmeldung: "🟢 **Anmeldung offen**",
+  checkin: "🟡 **Check-in läuft** in den Gruppenkanälen",
+  gruppen: "⚽ **Gruppenphase läuft**",
+  ko: "🔥 **K.-o.-Phase läuft**",
+  fertig: "🏆 **Turnier beendet**",
+  abgesagt: "⚠️ **Cup abgesagt** – zu wenige Mannschaften",
+  geloescht: "🗑️ **Turnier abgebrochen**",
+};
+
+export function signupPanel(t) {
+  const n = t.reg.length, f = fmtOf(n);
+  const closed = t.status !== "anmeldung";
+  const playing = closed ? (t.playing.length ? t.playing : t.reg) : f ? t.reg.slice(0, f) : t.reg;
+  const wait = closed ? t.wait : f ? t.reg.slice(f) : [];
+  const num = (k) => `\`${String(k + 1).padStart(2, "0")}\``;
+  const tl = (c, k, waitList) => `${num(k)} ${flagOf(c)} ${esc(c)}${t.status === "checkin" && waitList ? (t.waitChecked.includes(c) ? " ✅" : " ⏳") : ""}`;
+  const half = Math.ceil(playing.length / 2);
+  const fields = playing.length
+    ? [
+        { name: `👥 Mannschaften (${playing.length}${f && !closed ? "/" + f : ""})`, value: playing.slice(0, half).map((c, k) => tl(c, k)).join("\n"), inline: true },
+        ...(playing.length > half ? [{ name: "\u200b", value: playing.slice(half).map((c, k) => tl(c, k + half)).join("\n"), inline: true }] : []),
+      ]
+    : [{ name: "👥 Mannschaften", value: "_Noch keine Anmeldungen_" }];
+  if (wait.length) fields.push({ name: "⏳ Warteliste", value: wait.map((c, k) => tl(c, k, true)).join("\n") + "\n-# Rückt nach, wenn eine Mannschaft nicht eincheckt.", inline: false });
+  const times = t.times;
+  const description =
+    `${hhmm(times.close)} Anmeldeschluss · ${hhmm(times.close)} Auslosung · ${hhmm(times.checkinEnd)} Check-in-Ende · ${hhmm(times.kickoff)} Anpfiff\n\n` +
+    `${STATUS[t.status]}\n\n` + formatBlock(closed ? t.playing.length || n : n, closed);
+  const components = [];
+  if (t.status === "anmeldung") components.push(row(btn("Anmelden", "cup_join", 1, { emoji: { name: "⭐" } }), btn("Abmelden", "cup_leave")));
+  if (t.status === "checkin" && t.wait.length) components.push(row(btn("Warteliste: Einchecken", "cup_waitci", 3, { emoji: { name: "✅" } })));
+  return { embeds: [{ color: COLOR, title: `⭐ ${t.name.toUpperCase()}`, description: description.slice(0, 4096), fields, footer: FOOTER }], components };
+}
+
+export function drawPost(t) {
+  const d = FORMATS[t.fmt];
+  const rule = d.top === 1 ? `alle Gruppensieger + ${d.ex} beste Zweite` : `Erste und Zweite${d.ex ? ` + ${d.ex} beste Dritte` : ""}`;
+  return {
+    content: `🔒 **Anmeldung geschlossen – ${t.fmt}er-Format.** Check-in läuft jetzt bis ${hhmm(t.times.checkinEnd)} in eurem Gruppenkanal.${t.wait.length ? ` ${t.wait.length} ${t.wait.length === 1 ? "Mannschaft steht" : "Mannschaften stehen"} auf der Warteliste und checkt oben im Anmelde-Post ein.` : ""}`,
+    embeds: [{ color: COLOR, title: `⭐ Auslosung · ${t.fmt}er-Format`, fields: t.groups.map((g) => ({ name: `Gruppe ${g.name}`, value: g.teams.map((c) => `${flagOf(c)} ${esc(c)}`).join("\n"), inline: true })), description: `**Weiter ins ${KO_NAME[KO_SIZE[t.fmt]]}:** ${rule}` }],
+  };
+}
+
+// ---------- Gruppenkanal ----------
+export function groupCheckin(t, g, roleId) {
+  const lines = g.teams.map((c) => `${t.checked.includes(c) ? "✅" : t.out.includes(c) ? "❌" : "⏳"} ${flagOf(c)} ${esc(c)}`);
+  const open = t.status === "checkin";
+  return {
+    content: open && roleId ? `<@&${roleId}>` : "",
+    allowed_mentions: { roles: open && roleId ? [roleId] : [] },
+    embeds: [{
+      color: COLOR, title: `⭐ Gruppe ${g.name} · Check-in`,
+      description: (open ? `Bitte bis ${hhmm(t.times.checkinEnd)} einchecken. Wer nicht eincheckt, wird durch die Warteliste ersetzt.\n\n` : "") + lines.join("\n") + `\n\n-# Eingecheckt: ${g.teams.filter((c) => t.checked.includes(c)).length}/${g.teams.length}`,
+    }],
+    components: open ? [row(btn("Einchecken", "grp_ci", 3, { emoji: { name: "✅" } }))] : [],
+  };
+}
+
+export function tableText(t, gName) {
+  const rows = standings(t, gName);
+  return "```\n#  Verein            Sp S-U-N  TD Pkt\n" + rows.map((r, i) => `${i + 1}  ${pad(r.id + (t.out.includes(r.id) ? " ✗" : ""), 17)} ${String(r.sp).padStart(2)} ${`${r.s}-${r.u}-${r.n}`.padStart(5)} ${((r.t - r.gt) > 0 ? "+" + (r.t - r.gt) : String(r.t - r.gt)).padStart(3)} ${String(r.p).padStart(3)}`).join("\n") + "\n```";
+}
+
+export function matchLine(m, showId = true) {
+  const st = m.ff ? "gewertet" : m.status === "fertig" ? "" : m.status === "konflikt" ? "⚠️" : "";
+  const id = showId ? `\`#${m.id}\` ` : "";
+  if (m.status !== "fertig") return `${id}${flagOf(m.home)} ${esc(m.home)} – ${esc(m.away)} ${flagOf(m.away)} ${st}`.trim();
+  const w = m.phase === "ko" ? winner(m) : m.h > m.a ? m.home : m.a > m.h ? m.away : null;
+  const nm = (c) => (c === w ? `**${esc(c)}**` : esc(c));
+  return `${id}${flagOf(m.home)} ${nm(m.home)} **${m.h}:${m.a}**${m.pen ? ` (${m.pen[0]}:${m.pen[1]} i.E.)` : ""} ${nm(m.away)} ${flagOf(m.away)}${m.ff ? " · gewertet" : ""}`;
+}
+
+export function groupPlan(t, g, resultChannel) {
+  const ms = t.matches.filter((m) => m.phase === "gruppe" && m.group === g.name);
+  const rounds = [...new Set(ms.map((m) => m.round))];
+  // Kurz und knapp: nur Gegner und Ergebnisse
+  const line = (m) => {
+    if (m.status !== "fertig") return `${flagOf(m.home)} ${esc(m.home)} – ${esc(m.away)} ${flagOf(m.away)}`;
+    const w = m.h > m.a ? m.home : m.a > m.h ? m.away : null;
+    const nm = (c) => (c === w ? `**${esc(c)}**` : esc(c));
+    return `${flagOf(m.home)} ${nm(m.home)} **${m.h}:${m.a}** ${nm(m.away)} ${flagOf(m.away)}`;
+  };
+  const desc = rounds.map((r) => `**Spieltag ${r}**\n` + ms.filter((m) => m.round === r).map(line).join("\n")).join("\n\n");
+  const fallback = t.status === "gruppen" && !resultChannel; // ohne Ergebniskanal bleiben die Buttons hier
+  return {
+    embeds: [{ color: COLOR, title: `📋 Gruppe ${g.name} · Spielplan`, description: desc.slice(0, 4096) }],
+    components: fallback ? [row(btn("Ergebnis melden", "res_open", 1, { emoji: { name: "⚽" } }), btn("Größenvideo anfordern", "vid_req", 2, { emoji: { name: "📏" } }))] : [],
+  };
+}
+
+// ---------- Ergebnis melden ----------
+export function resultModal(m, koLabel) {
+  const input = (id, label, required, max, placeholder) => row({ type: 4, custom_id: id, label: label.slice(0, 45), style: 1, required, max_length: max, placeholder });
+  const comps = [input("h", `Tore ${m.home}`, true, 2, "0"), input("a", `Tore ${m.away}`, true, 2, "0")];
+  if (m.phase === "ko") comps.push(input("pen", "Elfmeter, nur bei Unentschieden (z. B. 4:3)", false, 5, "leer lassen, wenn kein Remis"));
+  return { type: 9, data: { custom_id: `res:${m.id}`, title: (m.phase === "gruppe" ? `Ergebnis · Spiel #${m.id}` : `${koLabel} · Spiel #${m.id}`).slice(0, 45), components: comps } };
+}
+
+export function matchPicker(ms) {
+  return {
+    content: "Für welches Spiel willst du das Ergebnis melden?",
+    components: [row({ type: 3, custom_id: "res_pick", placeholder: "Spiel auswählen", options: ms.slice(0, 25).map((m) => ({ label: `#${m.id} ${m.home} vs ${m.away}`.slice(0, 100), value: String(m.id), description: m.phase === "gruppe" ? `Gruppe ${m.group} · Spieltag ${m.round}` : "K.-o.-Runde" })) })],
+  };
+}
+
+export function resultConfirmed(m, byAdmin) {
+  return { embeds: [{ color: COLOR, description: `${byAdmin ? "✏️ **Ergebnis durch die Turnierleitung**" : "✅ **Ergebnis bestätigt**"}\n${matchLine(m, false)}` }] };
+}
+
+// ---------- Live-Spielplan ----------
+export function livePlan(t) {
+  const steps = [];
+  for (let r = 1; r <= t.maxRounds; r++) steps.push({ k: "g", r, n: `Spieltag ${r}` });
+  let n = t.koSize || KO_SIZE[t.fmt], kr = 1;
+  while (n > 2) { steps.push({ k: "k", r: kr, n: KO_NAME[n] }); n /= 2; kr++; }
+  steps.push({ k: "k", r: kr, n: "Finale" });
+  const on = (s) => (t.status === "gruppen" && s.k === "g" && s.r === t.round) || (t.status === "ko" && s.k === "k" && s.r === t.koRound);
+  const done = (s) => t.status === "fertig" || (s.k === "g" && (t.status === "ko" || (t.status === "gruppen" && s.r < t.round))) || (s.k === "k" && t.status === "ko" && s.r < t.koRound);
+  const prog = steps.map((s) => (on(s) ? `**▶ ${s.n}**` : done(s) ? `~~${s.n}~~` : s.n)).join(" · ");
+  const cur = currentMatches(t);
+  const now = t.status === "checkin" ? `**Check-in läuft** · Anpfiff ${hhmm(t.times.kickoff)}` : t.status === "fertig" ? "**Turnier beendet**" : `**Jetzt:** ${t.status === "gruppen" ? `Spieltag ${t.round}` : koRoundName(t) + (cur.some((m) => m.p3) ? " + Spiel um Platz 3" : "")} · **${cur.filter((m) => m.status === "fertig").length}/${cur.length}** Spiele beendet`;
+  const embeds = [{ color: COLOR, title: `⭐ LIVE-SPIELPLAN · ${t.name.toUpperCase()}`, description: `${prog}\n\n${now}` }];
+  if (t.status === "checkin" || t.status === "gruppen") {
+    for (const g of t.groups) {
+      const r = t.status === "checkin" ? 1 : t.round;
+      const ms = t.matches.filter((m) => m.group === g.name && m.round === r);
+      const tab = standings(t, g.name).map((x, i) => `${i + 1}. ${esc(x.id)} – ${x.p} Pkt`).join("\n");
+      embeds.push({ color: COLOR, title: `Gruppe ${g.name} · Spieltag ${r}`, description: `${ms.length ? ms.map((m) => matchLine(m, false) + (m.status !== "fertig" && t.status === "gruppen" ? " · läuft" : "")).join("\n") : "_spielfrei_"}\n\n${tab}`.slice(0, 4096) });
+    }
+  }
+  if (t.status === "ko") {
+    const lbl = (m) => (m.p3 ? "Platz 3" : m.final ? "Finale" : `Spiel ${m.slot + 1}`);
+    embeds.push({ color: COLOR, title: koRoundName(t) + (cur.some((m) => m.p3) ? " + Spiel um Platz 3" : ""), description: cur.sort((a, b) => a.slot - b.slot).map((m) => `\`${lbl(m)}\` ${matchLine(m, false)}${m.status !== "fertig" ? " · läuft" : ""}`).join("\n") });
+  }
+  if (t.status === "fertig" && t.podium) embeds.push({ color: COLOR, title: "🏆 Endstand", description: t.podium.map((c, i) => `${["🥇", "🥈", "🥉"][i]} ${teamLine(c)}`).join("\n") });
+  return { embeds: embeds.slice(0, 10) };
+}
+
+// ---------- K.-o.-Phase ----------
+export function koRoundPost(t, members, roleIds, resultChannel) {
+  const cur = currentMatches(t).sort((a, b) => a.slot - b.slot);
+  const pair = (m) => `${teamLine(m.home)} vs ${teamLine(m.away)}\n${ping([...(members[m.home] || []), ...(members[m.away] || [])])}`;
+  const fin = cur.find((m) => m.final), p3 = cur.find((m) => m.p3);
+  const name = koRoundName(t);
+  const roles = fin ? [roleIds["Finale"], p3 ? roleIds["Spiel um Platz 3"] : null] : [roleIds[name]];
+  const desc = fin ? `**🏆 Finale**\n${pair(fin)}${p3 ? `\n\n**🥉 Spiel um Platz 3**\n${pair(p3)}` : ""}` : cur.map(pair).join("\n\n");
+  const userIds = cur.flatMap((m) => [...(members[m.home] || []), ...(members[m.away] || [])]);
+  return {
+    content: `${roles.filter(Boolean).map((r) => `<@&${r}>`).join(" ")} **${fin ? "Finale und Spiel um Platz 3 – beide gleichzeitig!" : t.koRound === 1 ? "Die K.-o.-Phase beginnt!" : `Das ${name} steht!`}**`,
+    allowed_mentions: { roles: roles.filter(Boolean), users: userIds },
+    embeds: [{ color: COLOR, title: fin ? "🏆 Finale & Spiel um Platz 3" : `⚔️ ${name}`, description: desc + (resultChannel ? `\n\n📋 Ergebnisse und Größenvideos: <#${resultChannel}>` : "") + "\n\n-# Unentschieden? Dann Elfmeterschießen mit angeben.", footer: FOOTER }],
+    components: resultChannel ? [] : [row(btn("Ergebnis melden", "res_open", 1, { emoji: { name: "⚽" } }), btn("Größenvideo anfordern", "vid_req", 2, { emoji: { name: "📏" } }))],
+  };
+}
+
+export function bracket(t) {
+  const fields = [];
+  for (let r = 1; r <= t.koRound; r++) {
+    const ms = t.matches.filter((m) => m.phase === "ko" && m.round === r).sort((a, b) => a.slot - b.slot);
+    const fin = ms.find((m) => m.final);
+    if (fin) {
+      fields.push({ name: "🏆 Finale", value: matchLine(fin, false) });
+      const p3 = ms.find((m) => m.p3);
+      if (p3) fields.push({ name: "🥉 Spiel um Platz 3", value: matchLine(p3, false) });
+    } else fields.push({ name: koRoundName(t, r), value: ms.map((m) => matchLine(m, false)).join("\n").slice(0, 1024) });
+  }
+  return { embeds: [{ color: COLOR, title: `⭐ Turnierbaum · ${t.name}`, fields, footer: { text: "Aktualisiert sich automatisch" } }] };
+}
+
+// ---------- Hall of Fame ----------
+export function hofText(t, members, titleNo, finalLine) {
+  const [a, b, c] = t.podium;
+  const who = (club) => (members[club] || []).map((id) => `<@${id}>`).join(" ");
+  const lines = [
+    `🥇 **${esc(a)}** ${flagOf(a)} – ${who(a)}\nChampions-League-Sieger! Finale: ${finalLine}.`,
+    `🥈 **${esc(b)}** ${flagOf(b)} – ${who(b)}\nStarke Leistung bis ins Finale – Platz 2!`,
+    c ? `🥉 **${esc(c)}** ${flagOf(c)} – ${who(c)}\nSpiel um Platz 3 gewonnen – Bronze!` : null,
+  ].filter(Boolean);
+  return {
+    content: `🏆 **Glückwunsch an die Sieger der ${esc(t.name)}!**\n\n${lines.join("\n\n")}\n\n-# ${t.playing.length - t.out.length} Mannschaften · ${t.fmt}er-Format · Titel Nr. ${titleNo} für ${esc(a)}`,
+    allowed_mentions: { users: t.podium.flatMap((x) => members[x] || []) },
+  };
+}
+
+// ---------- Sperrliste ----------
+export function banPanel(bans, clubs) {
+  const clubOf = (u) => Object.entries(clubs).find(([, c]) => c.manager === u || c.co === u)?.[0];
+  const lines = bans.map((b) => {
+    const c = clubOf(b.user) || b.club;
+    return `🚫 <@${b.user}>${c ? ` · ${flagOf(c)} **${esc(c)}**` : ""}\n${BAN_REASONS[b.reason]} · bis <t:${unix(b.until)}:f> (<t:${unix(b.until)}:R>)`;
+  });
+  return {
+    embeds: [{
+      color: COLOR,
+      title: "🚫 CHAMPIONS LEAGUE CUP | SPERRLISTE",
+      description:
+        "Hier landen Mannschaften, die den Turnierabend kaputt machen, nicht auftauchen oder den Ablauf unnötig bremsen.\n\n" +
+        "**Gründe**\n" + BAN_REASONS.map((r) => `• ${r}`).join("\n") +
+        "\n\n**Dauer**\n• Standardsperre 7 Tage\n• Abgelaufene Sperren werden automatisch entfernt\n\n" +
+        `**Aktuell gesperrt (${bans.length})**\n` + (lines.length ? lines.join("\n\n") : "_Aktuell ist niemand gesperrt._"),
+      footer: { text: "Aktualisiert sich automatisch · Sperren: Turnierleitung & Mods" },
+    }],
+    components: [row(btn("Person sperren", "ban_start", 4, { emoji: { name: "🚫" } }), btn("Sperre aufheben", "ban_lift", 2, { disabled: !bans.length }))],
+  };
+}
+
+export const banStep1 = () => ({ content: "**Schritt 1 · Wen sperren?** Wähle die Person (Manager oder Co-VM).", embeds: [], components: [row({ type: 5, custom_id: "ban_user", placeholder: "Mitglied auswählen", min_values: 1, max_values: 1 })] });
+
+export const banStep2 = (u) => ({
+  content: `**Schritt 2 · Grund** für <@${u}>`, embeds: [],
+  components: [row({ type: 3, custom_id: `ban_r:${u}`, placeholder: "Grund auswählen", options: BAN_REASONS.map((r, i) => ({ label: r.slice(0, 100), value: String(i) })) })],
+});
+
+export const banStep3 = (u, r) => ({
+  content: `**Schritt 3 · Dauer** für <@${u}> – ${BAN_REASONS[r]}`, embeds: [],
+  components: [row({ type: 3, custom_id: `ban_d:${u}:${r}`, placeholder: "Dauer auswählen", options: BAN_DAYS.map((d) => ({ label: `${d} ${d === 1 ? "Tag" : "Tage"}${d === BAN_DEFAULT_DAYS ? " (Standard)" : ""}`, value: String(d), default: d === BAN_DEFAULT_DAYS })) })],
+});
+
+export const banStep4 = (u, r, d, partner) => ({
+  content: `**Bestätigen:** <@${u}> für **${d} ${d === 1 ? "Tag" : "Tage"}** sperren – ${BAN_REASONS[r]}${partner ? `\n-# <@${partner}> gehört zur selben Mannschaft und kann mitgesperrt werden.` : ""}`,
+  embeds: [],
+  components: [row(
+    btn("Sperren", `ban_ok:${u}:${r}:${d}:1`, 4),
+    ...(partner ? [btn("Beide sperren", `ban_ok:${u}:${r}:${d}:2`, 4)] : []),
+    btn("Mit Notiz sperren", `ban_note:${u}:${r}:${d}:${partner ? 2 : 1}`, 2),
+  )],
+});
+
+export const banNoteModal = (rest) => ({ type: 9, data: { custom_id: `ban_m:${rest}`, title: "Sperre mit Notiz", components: [row({ type: 4, custom_id: "note", label: "Notiz (nur für die Turnierleitung)", style: 2, required: true, max_length: 300 })] } });
+
+export const banLiftPicker = (bans) => ({
+  content: "**Welche Sperre aufheben?**", embeds: [],
+  components: [row({ type: 3, custom_id: "ban_lift_pick", placeholder: "Gesperrte Person auswählen", options: bans.slice(0, 25).map((b) => ({ label: `${b.club || "ohne Mannschaft"} – bis ${new Date(b.until).toLocaleDateString("de-AT")}`.slice(0, 100), description: BAN_REASONS[b.reason].slice(0, 100), value: b.user })) })],
+});
+
+// ---------- Ergebniskanal pro Gruppe ----------
+export function resultPanel(t, g) {
+  const r = t.status === "gruppen" ? t.round : t.status === "checkin" ? 1 : null;
+  const ms = r ? t.matches.filter((m) => m.group === g.name && m.round === r) : [];
+  const open = t.status === "gruppen";
+  return {
+    embeds: [{
+      color: COLOR,
+      title: `📋 Gruppe ${g.name} · Ergebnisse & Größenvideos`,
+      description:
+        "Hier tragt ihr eure Ergebnisse ein und könnt vom Gegner ein **Größenvideo** anfordern.\n\n" +
+        "• **Ergebnis eintragen:** eine Mannschaft trägt ein, der Gegner hat **2 Minuten** zum Bestätigen – sonst gilt das Ergebnis. Bei unterschiedlichen Ergebnissen wird die Turnierleitung markiert.\n" +
+        `• **Größenvideo anfordern:** nur in den ersten ${VIDEO_WINDOW_MIN} Spielminuten, maximal ${VIDEO_LIMIT}× pro Mannschaft und Turnier, 1× pro Spiel. Der Gegner hat bis nach Ende des Spiels Zeit, das Video hier im Kanal zu posten.\n\n` +
+        (t.status === "checkin" ? "_Los geht’s nach dem Check-in._" : r ? `**Spieltag ${r}**\n${ms.length ? ms.map((m) => matchLine(m)).join("\n") : "_spielfrei_"}` : "_Die Gruppenphase ist beendet._"),
+      footer: { text: "Aktualisiert sich automatisch" },
+    }],
+    components: open ? [row(btn("Ergebnis eintragen", "res_open", 1, { emoji: { name: "⚽" } }), btn("Größenvideo anfordern", "vid_req", 2, { emoji: { name: "📏" } }))] : [],
+  };
+}
+
+export function videoPost(v, users) {
+  return {
+    content: users.map((u) => `<@${u}>`).join(" "),
+    allowed_mentions: { users },
+    embeds: [{
+      color: COLOR, title: "📏 Größenvideo angefordert",
+      description: `${flagOf(v.by)} **${esc(v.by)}** fordert von ${flagOf(v.to)} **${esc(v.to)}** ein Größenvideo an (Spiel #${v.matchId}${v.minute ? `, ${v.minute}. Spielminute` : ""}).\n\n⏳ **Bis nach Ende des Spiels hast du Zeit, das Video in diesem Kanal zu posten.**`,
+    }],
+  };
+}
+export const videoModal = (id) => ({ type: 9, data: { custom_id: `vid_m:${id}`, title: "Größenvideo einreichen", components: [row({ type: 4, custom_id: "link", label: "Video-Link (YouTube, Streamable, Medal …)", style: 1, required: true, max_length: 300, placeholder: "https://" })] } });
+
+export function koResultPanel(t) {
+  const open = t.status === "ko";
+  const cur = open ? currentMatches(t).sort((a, b) => a.slot - b.slot) : [];
+  const lbl = (m) => (m.p3 ? "Platz 3" : m.final ? "Finale" : `Spiel ${m.slot + 1}`);
+  const title = open ? koRoundName(t) + (cur.some((m) => m.p3) ? " + Spiel um Platz 3" : "") : null;
+  return {
+    embeds: [{
+      color: COLOR,
+      title: "📋 K.-o.-Phase · Ergebnisse & Größenvideos",
+      description:
+        "Hier tragt ihr eure K.-o.-Ergebnisse ein und könnt vom Gegner ein **Größenvideo** anfordern.\n\n" +
+        "• **Ergebnis eintragen:** eine Mannschaft trägt ein, der Gegner hat **2 Minuten** zum Bestätigen. Bei Unentschieden das Elfmeterschießen mit angeben.\n" +
+        `• **Größenvideo anfordern:** nur in den ersten ${VIDEO_WINDOW_MIN} Spielminuten, zählt zu euren ${VIDEO_LIMIT} Anforderungen pro Turnier.\n\n` +
+        (open ? `**${title}**\n${cur.map((m) => `\`${lbl(m)}\` ${matchLine(m, false)}`).join("\n")}` : t.status === "fertig" ? "_Das Turnier ist beendet._" : t.status === "vorbei" ? "_Diese Runde ist beendet – die nächste Runde steht weiter unten._" : "_Die K.-o.-Phase hat noch nicht begonnen._"),
+      footer: { text: "Aktualisiert sich automatisch" },
+    }],
+    components: open ? [row(btn("Ergebnis eintragen", "res_open", 1, { emoji: { name: "⚽" } }), btn("Größenvideo anfordern", "vid_req", 2, { emoji: { name: "📏" } }))] : [],
+  };
+}
+
+/** Nachricht an den Gegner: bestätigen oder anderes Ergebnis */
+export function confirmAsk(m, reporter, users, h, a, pen, state = "offen") {
+  const score = `${flagOf(m.home)} **${esc(m.home)} ${h}:${a}${pen ? ` (${pen[0]}:${pen[1]} i.E.)` : ""} ${esc(m.away)}** ${flagOf(m.away)}`;
+  const until = Math.floor((Date.now() + 2 * 60 * 1000) / 1000);
+  const text = {
+    offen: `📨 **${esc(reporter)}** hat für Spiel #${m.id} eingetragen: ${score}\n⏳ Bitte bestätigen – sonst gilt das Ergebnis automatisch <t:${until}:R>.`,
+    bestaetigt: `✅ Ergebnis bestätigt: ${score}`,
+    auto: `✅ Ergebnis automatisch bestätigt (keine Reaktion in 2 Minuten): ${score}`,
+    konflikt: `⚠️ Unterschiedliche Ergebnisse für Spiel #${m.id} – die Turnierleitung entscheidet.`,
+  }[state];
+  return {
+    content: state === "offen" ? `${users.map((u) => `<@${u}>`).join(" ")} ${text}` : text,
+    allowed_mentions: { users: state === "offen" ? users : [] },
+    components: state === "offen" ? [row(btn("Bestätigen", `res_ok:${m.id}`, 3, { emoji: { name: "✅" } }), btn("Anderes Ergebnis", "res_open", 2, { emoji: { name: "✏️" } }))] : [],
+  };
+}
+
+// ---------- Regelwerk ----------
+export function rulesPanel(count) {
+  return {
+    embeds: [{
+      color: COLOR,
+      title: RULES.title,
+      thumbnail: { url: `${site()}/logo.jpg` },
+      fields: RULES.sections.map(([name, value]) => ({ name, value })),
+      footer: { text: `${count} ${count === 1 ? "Mitglied hat" : "Mitglieder haben"} das Regelwerk akzeptiert · Erst danach ist die Anmeldung zum Cup möglich` },
+    }],
+    components: [row(btn("Regeln akzeptieren", "rules_ok", 3, { emoji: { name: "✅" } }))],
+  };
+}
+
+export const videoMinuteModal = (limit) => ({ type: 9, data: { custom_id: "vid_min", title: "Größenvideo anfordern", components: [row({ type: 4, custom_id: "min", label: `Aktuelle Spielminute (nur bis zur ${limit}.)`, style: 1, required: true, max_length: 3, placeholder: "z. B. 23" })] } });
