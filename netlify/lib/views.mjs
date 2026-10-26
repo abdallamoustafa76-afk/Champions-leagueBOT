@@ -513,6 +513,13 @@ export function rulesPanel(count) {
       title: RULES.title,
       thumbnail: { url: `${site()}/logo.jpg` },
       fields: RULES.sections.map(([name, value]) => ({ name, value })),
+    }, ...(RULES.highlight ? [{
+      color: 0xe02424, // rot, damit die Regel sofort auffällt
+      title: RULES.highlight.title,
+      description: RULES.highlight.text,
+    }] : []), {
+      color: COLOR,
+      description: "Mit dem Button unten akzeptierst du das Regelwerk.",
       footer: { text: `${count} ${count === 1 ? "Mitglied hat" : "Mitglieder haben"} das Regelwerk akzeptiert · Erst danach ist die Anmeldung zum Cup möglich` },
     }],
     components: [row(btn("Regeln akzeptieren", "rules_ok", 3, { emoji: { name: "✅" } }))],

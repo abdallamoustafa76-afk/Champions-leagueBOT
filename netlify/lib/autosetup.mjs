@@ -30,10 +30,13 @@ const PLAN = [
     { key: "g" + g, name: "⚽・" + fancy("Gruppe-" + g), cat: "groups", prof: "group:" + g },
     { key: "r" + g, name: "📋・" + fancy(g + "-Ergebnisse"), cat: "groups", prof: "groupres:" + g },
   ]),
+  { key: "support", name: "🎫・" + fancy("Support"), cat: "support", prof: "public" },
+  { key: "bewerbung", name: "📋・" + fancy("Staff-Bewerbung"), cat: "support", prof: "public" },
+  { key: "admin", name: "⚙️・" + fancy("Admin"), cat: "staff", prof: "admins" },
   { key: "ko", name: "⚔️・" + fancy("KO-Phase"), cat: "ko", prof: "ko" },
   { key: "kor", name: "📋・" + fancy("KO-Ergebnisse"), cat: "ko", prof: "kores" },
 ];
-const CATS = { info: "📌 INFO", teams: "👕 MANNSCHAFTEN", cl: "⭐ CHAMPIONS LEAGUE", groups: "⚽ GRUPPEN", ko: "⚔️ K.-O.-PHASE" };
+const CATS = { info: "📌 INFO", teams: "👕 MANNSCHAFTEN", cl: "⭐ CHAMPIONS LEAGUE", groups: "⚽ GRUPPEN", ko: "⚔️ K.-O.-PHASE", support: "🛟 SUPPORT 🛟", staff: "🛡️ STAFF BEREICH 🛡️" };
 
 /** Kanalname → Schlüssel (funktioniert auch mit Schreibschrift, Emojis und Trennzeichen) */
 export function detectKey(rawName) {
@@ -45,9 +48,10 @@ export function detectKey(rawName) {
   if (n.includes("kophase")) return "ko";
   const day = DAYS.findIndex((d) => n === d.toLowerCase());
   if (day >= 0) return "day" + (day + 1);
-  const map = [["teamofthetournament", "tott"], ["tott", "tott"], ["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
+  const map = [["staffbewerbung", "bewerbung"], ["bewerbung", "bewerbung"], ["support", "support"], ["teamofthetournament", "tott"], ["tott", "tott"], ["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
   for (const [kw, key] of map) if (n.includes(kw)) return key;
   if (n === "regeln") return "rules";
+  if (n === "admin") return "admin";
   return null;
 }
 
@@ -62,6 +66,7 @@ function overwrites(prof, roles) {
   if (prof === "public") return [ro];
   if (prof === "managers") return [hide, seeRO(roles.manager), lead].filter(Boolean);
   if (prof === "staff") return [hide, lead, see(roles.moderator, P.SEND)].filter(Boolean);
+  if (prof === "admins") return [hide]; // nur Server-Admins (sehen ohnehin alles) und der Bot
   if (prof.startsWith("group:")) return [hide, see(roles.groups?.[prof.slice(6)], P.SEND), lead].filter(Boolean);
   if (prof.startsWith("groupres:")) return [hide, see(roles.groups?.[prof.slice(9)], P.SEND, P.FILES), lead].filter(Boolean);
   if (prof === "ko") return [hide, ...ROUND_ROLES.map((r) => see(roles.rounds?.[r], P.SEND)), lead].filter(Boolean);
@@ -73,7 +78,7 @@ function overwrites(prof, roles) {
 export async function setupRoles() {
   const existing = (await getRoles()) || [];
   const find = async (n, color) => { const r = existing.find((x) => x.name.toLowerCase() === n.toLowerCase()); if (r) return r.id; const c = await createRole(n, color); return c?.id ?? null; };
-  const roles = { turnierleitung: await find("Turnierleitung", 0xc9a227), moderator: await find("Moderator", 0xe67e22), manager: await find("Manager", 0x2f6fdc), spieler: await find("Spieler", 0x4a8a5c), groups: {}, rounds: {} };
+  const roles = { turnierleitung: await find("Turnierleitung", 0xc9a227), moderator: await find("Moderator", 0xe67e22), support: await find("Support", 0x1abc9c), manager: await find("Manager", 0x2f6fdc), spieler: await find("Spieler", 0x4a8a5c), groups: {}, rounds: {} };
   for (const g of GROUP_NAMES) roles.groups[g] = await find(`Gruppe ${g}`, 0x3ba55c);
   const rc = { Achtelfinale: 0x3c9ad6, Viertelfinale: 0x5865f2, Halbfinale: 0x9b59b6, Finale: 0xc9a227, "Spiel um Platz 3": 0xb5763a };
   for (const r of ROUND_ROLES) roles.rounds[r] = await find(r, rc[r]);
@@ -145,6 +150,7 @@ export async function processSetupJobs(budgetMs = 8000) {
     if (job.k === "zeit") await setDay(job.day, job.ch, job.kickoff);
     if (job.k === "panels") {
       await refreshRulesPanel(); await refreshRolesPanel(); await refreshRegPanel(); await refreshTeamPanel(); await refreshOverview(); await refreshBanPanel();
+      { const S = await import("./support.mjs"); await S.refreshTicketPanel(); await S.refreshApplyPanel(); }
       await (await import("./trophies.mjs")).refreshTrophyPanel();
     }
     await mutate("setupjobs", (x) => {
@@ -189,7 +195,7 @@ export async function resetBot(scope = "setup") {
   const cfg = await getConfig();
   const panels = (await get("panels")) || {};
   const ch = cfg.channels || {};
-  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], [ch.trophy, panels.trophy], ...(panels.over || []).map((id) => [ch.over, id])];
+  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], [ch.trophy, panels.trophy], [ch.support, panels.ticket], [ch.bewerbung, panels.apply], ...(panels.over || []).map((id) => [ch.over, id])];
   let deleted = 0;
   for (const [c, id] of msgs) if (c && id && (await deleteMessage(c, id))) deleted++;
   for (const k of ["config", "panels", "zeitplan", "setupjobs"]) await del(k);

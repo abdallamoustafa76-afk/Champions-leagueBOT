@@ -1,6 +1,6 @@
 // Trophäenhalle: Medaillen, Statistiken und Rekorde über alle Cups.
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
-import { upsertMessage, pinMessage } from "./discord.mjs";
+import { upsertMessage } from "./discord.mjs";
 import { isFreilos, flagOf } from "./data.mjs";
 import { winner } from "./tournament.mjs";
 import { shortDate } from "./time.mjs";
@@ -106,5 +106,5 @@ export async function refreshTrophyPanel() {
   const site = process.env.URL || process.env.SITE_URL || "";
   const panels = (await get("panels")) || {};
   const id = await upsertMessage(ch, panels.trophy, trophyPanel(await get("stats"), await getClubs(), site));
-  if (id && id !== panels.trophy) { await mutate("panels", (p) => { p.trophy = id; }, { initial: { over: [] } }); await pinMessage(ch, id); }
+  if (id && id !== panels.trophy) { await mutate("panels", (p) => { p.trophy = id; }, { initial: { over: [] } }); }
 }

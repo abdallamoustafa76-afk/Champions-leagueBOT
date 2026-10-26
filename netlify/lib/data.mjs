@@ -69,6 +69,9 @@ export const BASE_CHANNEL_TYPES = {
   kor: "KO-Phase · Ergebnisse",
   ban: "Sperrliste",
   log: "Turnierleitung (Log)",
+  support: "Support (Ticket-Panel)",
+  bewerbung: "Staff-Bewerbung",
+  admin: "Admin (Bewerbungen & Ticket-Log)",
 };
 export const CHANNEL_TYPES = {
   reg: "Team-registrieren",
@@ -86,6 +89,9 @@ export const CHANNEL_TYPES = {
   kor: "KO-Phase · Ergebnisse",
   log: "Turnierleitung (Log)",
   ban: "Sperrliste",
+  support: "Support (Ticket-Panel)",
+  bewerbung: "Staff-Bewerbung",
+  admin: "Admin (Bewerbungen & Ticket-Log)",
   ...Object.fromEntries(GROUP_NAMES.map((g) => ["g" + g, "Gruppe " + g])),
   ...Object.fromEntries(GROUP_NAMES.map((g) => ["r" + g, "Gruppe " + g + " · Ergebnisse"])),
 };
@@ -110,6 +116,11 @@ export const VIDEO_WINDOW_MIN = 40; // nur bis zur 40. Spielminute (Spieluhr in 
 export const RULES_VERSION = 1; // erhöhen, wenn sich das Regelwerk ändert → alle müssen neu akzeptieren
 export const RULES = {
   title: "🏆 CHAMPIONS LEAGUE CUP – FC 27 REGELWERK",
+  // Wird als eigener roter Kasten unter dem Regelwerk angezeigt
+  highlight: {
+    title: "🔴 7-TAGE-AKTIVITÄTSREGEL 🔴",
+    text: "**Spielt eure Mannschaft 7 Tage lang keinen Cup, verliert ihr euren Verein!**\nEr wird dann automatisch wieder frei und kann von jemand anderem übernommen werden.\n\n⚠️ **Warnung** an Tag 5 und Tag 6 im Benachrichtigungs-Kanal\n✅ **Ein einziger Cup reicht**, damit der Zähler wieder bei null startet",
+  },
   sections: [
     ["⚠️ Pflicht", "**5+1 ist Pflicht** – sonst seid ihr automatisch disqualifiziert."],
     ["🤝 Respekt & Fair Play", "Der Champions League Cup steht für Fairness und gegenseitigen Respekt.\nJeder Teilnehmer verpflichtet sich zu:\n• Respektvollem Umgang mit allen Spielern\n• Fair Play – auf und neben dem Platz\n• Sachlichen Diskussionen ohne Beleidigungen oder Provokationen\n• Sportlichem Verhalten – egal ob Sieg oder Niederlage"],

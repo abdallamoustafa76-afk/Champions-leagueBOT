@@ -1,4 +1,4 @@
-# ⭐ Champions League Bot 2.1
+# ⭐ Champions League Bot 2.2
 
 Discord-Bot für tägliche Champions-League-Cups: 128 Vereine zum Übernehmen, automatische Anmeldelisten pro Wochentag, Formate von 8 bis 32 Mannschaften, Check-in in Gruppenkanälen, Live-Spielplan, K.-o.-Phase mit Runden-Rollen und Siegerbild in der Hall of Fame. Läuft komplett auf Netlify, Einrichtung nur im Browser.
 
@@ -160,6 +160,23 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - Optionale Umgebungsvariablen: `EA_AUTO=0` schaltet das TOTT aus, `EA_PLATFORM` = `common-gen5` (Standard: PS5/Xbox Series/PC) oder `common-gen4` (PS4/Xbox One).
 - Nach dem Update einmal `https://DEINE-SEITE.netlify.app/api/setup?key=DEIN_SETUP_KEY` aufrufen, damit die neuen Befehle erscheinen.
 
+## Support-Tickets
+
+- Kanal 🎫 Support: Panel mit **Ticket öffnen** → Kategorie (Frage, Problem mit Spiel/Ergebnis, Spieler melden, Einspruch gegen Sperre, Sonstiges) → kurze Beschreibung.
+- Der Bot legt einen privaten Kanal `ticket-0012-name` in derselben Kategorie wie der Support-Kanal an. Sehen können ihn nur die Person, Turnierleitung, Moderator und Support. Der Staff wird gepingt.
+- Pro Person ein offenes Ticket. Buttons im Ticket: **Übernehmen** und **Person hinzufügen** (nur Staff), **Ticket schließen** (Person selbst oder Staff).
+- Beim Schließen wird der Kanal **gelöscht, ohne Verlauf**. Im Admin-Kanal steht nur eine kurze Zeile, wer welches Ticket geschlossen hat.
+- Der Bot braucht dafür das Recht **Kanäle verwalten**.
+
+## Staff-Bewerbungen
+
+- Kanal 📋 Staff-Bewerbung: Panel mit **Jetzt bewerben** → Position (**Moderator** oder **Support**) → Formular mit 5 Fragen (Alter, Aktivität, Erfahrung, Motivation, Sonstiges).
+- Jede Bewerbung landet als Karte im Kanal ⚙️ Admin mit **Annehmen**, **Ablehnen** (mit Begründung) und **Gespräch** (öffnet ein Ticket mit dem Bewerber).
+- Entscheiden können **nur Server-Admins** (Discord-Recht Administrator). Beim Annehmen wird die Rolle automatisch vergeben. Die Antwort bekommt der Bewerber im 🔔 Benachrichtigungs-Kanal.
+- Eine offene Bewerbung pro Person, neu bewerben frühestens nach 14 Tagen.
+- `/cl-bewerbung öffnen` bzw. `/cl-bewerbung schließen` (nur Server-Admins) – das Panel zeigt dann „Bewerbungen geschlossen“.
+- Kanäle verknüpfen: `/cl-einrichten kanal typ: Support (Ticket-Panel)`, `… typ: Staff-Bewerbung`, `… typ: Admin (Bewerbungen & Ticket-Log)`, danach `/cl-einrichten rollen` (legt die Rolle **Support** an) und `/cl-einrichten panels`.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
@@ -183,6 +200,7 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin verein-freigeben verein` | Verein freigeben |
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
+| `/cl-bewerbung öffnen · schließen` | Staff-Bewerbungen öffnen/schließen (nur Server-Admins) |
 | `/cl-admin ea-verknüpfen verein [ea_id]` | EA-Club neu suchen oder ID direkt eintragen |
 
 Spieler melden Ergebnisse über den Button im Spielplan oder mit `/cl-ergebnis`.

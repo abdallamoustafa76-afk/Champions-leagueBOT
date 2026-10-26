@@ -58,6 +58,13 @@ const COMMANDS = [
   },
   { name: "cl-ergebnis", description: "Ergebnis deines Spiels melden" },
   {
+    name: "cl-bewerbung", description: "Staff-Bewerbungen öffnen oder schließen (nur Server-Admins)",
+    options: [
+      { type: 1, name: "öffnen", description: "Bewerbungen annehmen" },
+      { type: 1, name: "schließen", description: "Keine neuen Bewerbungen mehr annehmen" },
+    ],
+  },
+  {
     name: "cl-admin", description: "Werkzeuge für die Turnierleitung",
     options: [
       { type: 1, name: "anmeldeschluss", description: "Anmeldung in diesem Kanal sofort schließen und auslosen" },

@@ -1,6 +1,6 @@
 // Sperrliste: Personen sperren, automatisch ablaufen lassen.
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
-import { sendMessage, upsertMessage, pinMessage } from "./discord.mjs";
+import { sendMessage, upsertMessage } from "./discord.mjs";
 import { notify } from "./notify.mjs";
 import { BAN_REASONS, COLOR, flagOf } from "./data.mjs";
 import * as V from "./views.mjs";
@@ -20,7 +20,7 @@ export async function refreshBanPanel() {
   const cfg = await getConfig(); if (!cfg.channels.ban) return;
   const panels = (await get("panels")) || {};
   const id = await upsertMessage(cfg.channels.ban, panels.ban, V.banPanel(await getActiveBans(), await getClubs()));
-  if (id && id !== panels.ban) { await mutate("panels", (p) => { p.ban = id; }, { initial: { over: [] } }); await pinMessage(cfg.channels.ban, id); }
+  if (id && id !== panels.ban) { await mutate("panels", (p) => { p.ban = id; }, { initial: { over: [] } }); }
 }
 
 /** Personen sperren */

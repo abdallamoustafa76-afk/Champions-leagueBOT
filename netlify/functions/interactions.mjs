@@ -1,6 +1,6 @@
 import nacl from "tweetnacl";
 import { get, set, mutate, getConfig, getClubs, tKey } from "../lib/store.mjs";
-import { editOriginal, getRoles, createRole } from "../lib/discord.mjs";
+import { editOriginal, discord } from "../lib/discord.mjs";
 import { enqueue, processQueue } from "../lib/roles.mjs";
 import * as T from "../lib/tournament.mjs";
 import * as V from "../lib/views.mjs";
@@ -10,6 +10,7 @@ import * as B from "../lib/bans.mjs";
 import { baseNameOf, nickFor, setNick } from "../lib/names.mjs";
 import * as AS from "../lib/autosetup.mjs";
 import * as EAF from "../lib/eaflow.mjs";
+import * as SUP from "../lib/support.mjs";
 import { parseVienna, parseTime, toMinutes, nextOccurrence, dateKey, shortDate, todayKey, daysBetween, minutesToHHMM } from "../lib/time.mjs";
 
 // ---------- Hilfen ----------
@@ -75,6 +76,11 @@ async function command(i, context) {
   const cfg = await getConfig();
   const name = i.data.name;
   if (name === "cl-ergebnis") return resultOpen(i);
+  if (name === "cl-bewerbung") {
+    if (!SUP.isServerAdmin(i.member)) return eph("Das dürfen nur Server-Admins.");
+    const open = i.data.options[0].name === "öffnen";
+    return background(i, context, async () => { await SUP.setApplicationsOpen(open); return open ? "✅ Bewerbungen sind jetzt **geöffnet**." : "🔒 Bewerbungen sind jetzt **geschlossen**."; });
+  }
   if (!isAdmin(i, cfg)) return eph("Das darf nur die Turnierleitung.");
   if (name === "cl-einrichten") return setup(i, context, cfg);
   if (name === "cl-zeitplan") return schedule(i, context);
@@ -129,19 +135,13 @@ async function setup(i, context, cfg) {
   }
   if (sub.name === "rollen") {
     return background(i, context, async () => {
-      const existing = (await getRoles()) || [];
-      const find = async (n, color) => { const r = existing.find((x) => x.name.toLowerCase() === n.toLowerCase()); if (r) return r.id; const c = await createRole(n, color); return c?.id ?? null; };
-      const roles = { turnierleitung: await find("Turnierleitung", 0xc9a227), moderator: await find("Moderator", 0xe67e22), manager: await find("Manager", 0x2f6fdc), spieler: await find("Spieler", 0x4a8a5c), groups: {}, rounds: {} };
-      for (const g of GROUP_NAMES) roles.groups[g] = await find(`Gruppe ${g}`, 0x3ba55c);
-      const rc = { Achtelfinale: 0x3c9ad6, Viertelfinale: 0x5865f2, Halbfinale: 0x9b59b6, Finale: 0xc9a227, "Spiel um Platz 3": 0xb5763a };
-      for (const r of ROUND_ROLES) roles.rounds[r] = await find(r, rc[r]);
-      await mutate("config", (c) => { c.roles = roles; }, { initial: { channels: {}, roles: {} } });
-      const missing = [roles.turnierleitung, roles.moderator, roles.manager, roles.spieler, ...Object.values(roles.groups), ...Object.values(roles.rounds)].filter((x) => !x).length;
+      const roles = await AS.setupRoles();
+      const missing = [roles.turnierleitung, roles.moderator, roles.support, roles.manager, roles.spieler, ...Object.values(roles.groups), ...Object.values(roles.rounds)].filter((x) => !x).length;
       return missing ? `⚠️ ${missing} Rollen konnten nicht angelegt werden – hat der Bot „Rollen verwalten“?` : "✅ Alle Rollen sind verknüpft (vorhandene übernommen, fehlende angelegt). Zieh die Rolle des Bots in der Rollenliste über alle diese Rollen.";
     });
   }
   if (sub.name === "panels") {
-    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); await (await import("../lib/trophies.mjs")).refreshTrophyPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Trophäenhalle, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste gepostet bzw. aktualisiert."; });
+    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); await (await import("../lib/trophies.mjs")).refreshTrophyPanel(); await SUP.refreshTicketPanel(); await SUP.refreshApplyPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Trophäenhalle, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht, Sperrliste, Support und Staff-Bewerbung gepostet bzw. aktualisiert."; });
   }
   if (sub.name === "status") {
     const lines = Object.entries(CHANNEL_TYPES).map(([k, n]) => `${cfg.channels?.[k] ? "✅" : "▫️"} **${n}**${cfg.channels?.[k] ? ` → <#${cfg.channels[k]}>` : ""}`);
@@ -278,6 +278,11 @@ async function resultOpen(i) {
 async function component(i, context) {
   const cfg = await getConfig();
   const id = i.data.custom_id, uid = uidOf(i);
+
+  // --- Support-Tickets ---
+  if (id.startsWith("tk_")) return ticketComponent(i, context, cfg, id, uid);
+  // --- Staff-Bewerbungen ---
+  if (id.startsWith("ap_")) return applyComponent(i, context, id, uid);
 
   // --- Trophäenhalle ---
   if (id === "stats_me") return eph(await (await import("../lib/trophies.mjs")).myStats(uid));
@@ -490,6 +495,28 @@ async function modal(i, context) {
     return reply(i, { content: `${c.flag} **Willkommen, Manager von ${V.esc(c.name)}!**\nDeine Mannschaft findest du in ${cfg.channels.team ? `<#${cfg.channels.team}>` : "Meine-Mannschaft"}.`, embeds: [], components: [] });
   }
 
+  if (id.startsWith("tk_m:")) {
+    const cat = id.slice(5);
+    if (!SUP.TICKET_CATS[cat]) return eph("Unbekannte Kategorie.");
+    return background(i, context, async () => {
+      const r = await SUP.createTicket({ uid, name: i.member?.user?.username, cat, text: v.text?.trim() || "" });
+      return r.existing ? `Du hast schon ein offenes Ticket: <#${r.channelId}>` : `✅ Dein Ticket ist offen: <#${r.channelId}>`;
+    }, { update: isEphemeralMsg(i) });
+  }
+  if (id.startsWith("ap_m:")) {
+    const pos = id.slice(5);
+    if (!SUP.POSITIONS[pos]) return eph("Unbekannte Position.");
+    return background(i, context, async () => {
+      const a = await SUP.submitApplication(uid, pos, v);
+      return `✅ Deine Bewerbung als **${SUP.POSITIONS[pos].label}** (#${a.id}) ist eingegangen. Die Antwort bekommst du im Benachrichtigungs-Kanal.`;
+    }, { update: isEphemeralMsg(i) });
+  }
+  if (id.startsWith("ap_no_m:")) {
+    if (!SUP.isServerAdmin(i.member)) return eph("Über Bewerbungen entscheiden nur Server-Admins.");
+    const appId = Number(id.split(":")[1]);
+    return background(i, context, async () => { await SUP.decideApplication(appId, false, uid, v.reason?.trim() || ""); return `❌ Bewerbung #${appId} abgelehnt. Die Person wurde benachrichtigt.`; });
+  }
+
   if (id.startsWith("ban_m:")) {
     if (!isStaff(i, cfg)) return reply(i, { content: "❌ Sperren können nur die **Turnierleitung** und **Mods**.", components: [] });
     return doBan(i, context, id.slice("ban_m:".length), v.note?.trim() || "");
@@ -539,6 +566,68 @@ async function modal(i, context) {
     });
   }
   return eph("Unbekanntes Formular.");
+}
+
+// ---------- Support-Tickets ----------
+async function ticketComponent(i, context, cfg, id, uid) {
+  if (id === "tk_open") {
+    const open = (await get("tickets"))?.open?.[uid];
+    if (open && !String(open).startsWith("p:") && (await SUP.ticketOf(open)) && (await discord(`/channels/${open}`))) return eph(`Du hast schon ein offenes Ticket: <#${open}>`);
+    return { type: 4, data: { flags: 64, ...SUP.ticketCatSelect() } };
+  }
+  if (id === "tk_cat") return SUP.ticketModal(i.data.values[0]);
+  const tk = await SUP.ticketOf(i.channel_id);
+  if (!tk) return eph("Dieses Ticket gibt es nicht mehr.");
+  const staff = SUP.isTicketStaff(i.member, cfg);
+  if (id === "tk_claim") {
+    if (!staff) return eph("Übernehmen kann nur das Staff-Team.");
+    return background(i, context, async () => { await SUP.claimTicket(i.channel_id, uid); return "✅ Du hast das Ticket übernommen."; });
+  }
+  if (id === "tk_add") {
+    if (!staff) return eph("Personen hinzufügen kann nur das Staff-Team.");
+    return { type: 4, data: { flags: 64, content: "Wen möchtest du hinzufügen?", components: [{ type: 1, components: [{ type: 5, custom_id: "tk_add_pick", placeholder: "Person wählen" }] }] } };
+  }
+  if (id === "tk_add_pick") {
+    if (!staff) return eph("Personen hinzufügen kann nur das Staff-Team.");
+    const target = i.data.values?.[0];
+    return background(i, context, async () => { await SUP.addToTicket(i.channel_id, target); return `✅ <@${target}> hinzugefügt.`; }, { update: true });
+  }
+  if (id === "tk_close") {
+    if (!staff && tk.uid !== uid) return eph("Schließen kann nur die Person selbst oder das Staff-Team.");
+    return { type: 4, data: { flags: 64, content: "🔒 **Ticket wirklich schließen?** Der Kanal wird gelöscht, der Verlauf wird nicht gespeichert.", components: [{ type: 1, components: [{ type: 2, style: 2, label: "Abbrechen", custom_id: "tk_close_no" }, { type: 2, style: 4, label: "Ja, schließen", custom_id: "tk_close_ok" }] }] } };
+  }
+  if (id === "tk_close_no") return reply(i, { content: "Abgebrochen.", components: [] });
+  if (id === "tk_close_ok") {
+    if (!staff && tk.uid !== uid) return eph("Schließen kann nur die Person selbst oder das Staff-Team.");
+    later(context, () => SUP.closeTicket(i.channel_id, uid));
+    return reply(i, { content: "🔒 Das Ticket wird geschlossen …", components: [] });
+  }
+  return eph("Unbekannte Aktion.");
+}
+
+// ---------- Staff-Bewerbungen ----------
+async function applyComponent(i, context, id, uid) {
+  if (id === "ap_open") {
+    try { await SUP.applyCheck(uid); } catch (e) { return eph(`❌ ${e.message}`); }
+    return { type: 4, data: { flags: 64, ...SUP.applyPosSelect() } };
+  }
+  if (id === "ap_pos") {
+    try { await SUP.applyCheck(uid); } catch (e) { return reply(i, { content: `❌ ${e.message}`, components: [] }); }
+    return SUP.applyModal(i.data.values[0]);
+  }
+  if (!SUP.isServerAdmin(i.member)) return eph("Über Bewerbungen entscheiden nur Server-Admins.");
+  const appId = Number(id.split(":")[1]);
+  if (id.startsWith("ap_yes:")) return background(i, context, async () => { const r = await SUP.decideApplication(appId, true, uid); return `✅ Bewerbung #${appId} angenommen.${r.roleMissing ? " ⚠️ Die Rolle ist noch nicht verknüpft – `/cl-einrichten rollen` ausführen und die Rolle von Hand vergeben." : " Die Rolle wird vergeben."}`; });
+  if (id.startsWith("ap_no:")) return SUP.rejectModal(appId);
+  if (id.startsWith("ap_talk:")) {
+    return background(i, context, async () => {
+      const a = await SUP.getApplication(appId);
+      if (!a) throw new Error("Diese Bewerbung gibt es nicht mehr.");
+      const r = await SUP.createTicket({ uid: a.uid, name: `bewerbung-${a.id}`, cat: "gespraech", text: `Gespräch zur Bewerbung #${a.id} als ${SUP.POSITIONS[a.pos].label}.`, extra: [uid] });
+      return `💬 ${r.existing ? "Die Person hatte schon ein offenes Ticket – du wurdest hinzugefügt" : "Gesprächs-Ticket erstellt"}: <#${r.channelId}>`;
+    });
+  }
+  return eph("Unbekannte Aktion.");
 }
 
 async function doBan(i, context, rest, note) {

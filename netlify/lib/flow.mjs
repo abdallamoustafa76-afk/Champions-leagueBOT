@@ -1,6 +1,6 @@
 // Abläufe mit Discord-Auswirkungen: Posts, Rollen, Phasenwechsel.
 import { get, set, del, mutate, keys, getConfig, getClubs, tKey } from "./store.mjs";
-import { sendMessage, editMessage, upsertMessage, sendWithFile, pinMessage, deleteMessage } from "./discord.mjs";
+import { sendMessage, editMessage, upsertMessage, sendWithFile, deleteMessage } from "./discord.mjs";
 import { enqueue } from "./roles.mjs";
 import * as T from "./tournament.mjs";
 import * as V from "./views.mjs";
@@ -27,13 +27,13 @@ export async function refreshRegPanel() {
   const cfg = await getConfig(); if (!cfg.channels.reg) return;
   const p = await panels(), clubs = await getClubs();
   const id = await upsertMessage(cfg.channels.reg, p.reg, V.regPanel(clubs));
-  if (id && id !== p.reg) { await savePanel("reg", id); await pinMessage(cfg.channels.reg, id); }
+  if (id && id !== p.reg) { await savePanel("reg", id); }
 }
 export async function refreshTeamPanel() {
   const cfg = await getConfig(); if (!cfg.channels.team) return;
   const p = await panels();
   const id = await upsertMessage(cfg.channels.team, p.team, V.teamPanel());
-  if (id && id !== p.team) { await savePanel("team", id); await pinMessage(cfg.channels.team, id); }
+  if (id && id !== p.team) { await savePanel("team", id); }
 }
 export async function refreshOverview() {
   const cfg = await getConfig(); if (!cfg.channels.over) return;
@@ -57,14 +57,14 @@ export async function refreshRulesPanel() {
   const p = await panels();
   const count = Object.values((await get("rules")) || {}).filter((v) => v === RULES_VERSION).length;
   const id = await upsertMessage(cfg.channels.rules, p.rules, V.rulesPanel(count));
-  if (id && id !== p.rules) { await savePanel("rules", id); await pinMessage(cfg.channels.rules, id); }
+  if (id && id !== p.rules) { await savePanel("rules", id); }
 }
 
 export async function refreshRolesPanel() {
   const cfg = await getConfig(); if (!cfg.channels.roles) return;
   const p = await panels();
   const id = await upsertMessage(cfg.channels.roles, p.roles, V.rolesPanel());
-  if (id && id !== p.roles) { await savePanel("roles", id); await pinMessage(cfg.channels.roles, id); }
+  if (id && id !== p.roles) { await savePanel("roles", id); }
 }
 
 /** Verein freigeben (Verlassen, Löschen, Inaktivität, Manager-Rolle weg). Co-VM übernimmt beim Verlassen. */
@@ -91,7 +91,6 @@ export async function releaseClub(name, { transferToCo = false, reason = "" } = 
     if (result.co) await setNick(result.co, result.coOrig);
   }
   if (!result.transferred && result.co) await enqueue([{ u: result.co, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Mannschaft aufgelöst – Co-VM entfernt" }]);
-  if (!result.transferred && cfg.channels.reg) await sendMessage(cfg.channels.reg, V.freeAgainPost(name, reason));
   await Promise.all([refreshRegPanel(), refreshOverview()]);
   return result;
 }
@@ -174,7 +173,7 @@ export async function doDraw(channelId) {
     const m = await sendMessage(ch, V.groupCheckin(t, g, cfg.roles.groups?.[g.name]));
     ids[g.name] = { checkin: m?.id ?? null, plan: null, res: null };
     const rch = cfg.channels["r" + g.name];
-    if (rch) { const rm = await sendMessage(rch, V.resultPanel(t, g)); if (rm) { ids[g.name].res = rm.id; await pinMessage(rch, rm.id); } }
+    if (rch) { const rm = await sendMessage(rch, V.resultPanel(t, g)); if (rm) { ids[g.name].res = rm.id; } }
   }
   const live = cfg.channels.live ? await sendMessage(cfg.channels.live, V.livePlan(t)) : null;
   await mutate(tKey(channelId), (x) => { x.msgs.groups = ids; x.msgs.live = live?.id ?? null; });
@@ -214,7 +213,7 @@ export async function doCheckinEnd(channelId) {
     const ch = cfg.channels["g" + g.name]; if (!ch) continue;
     await refreshGroupCheckin(t, g.name);
     const plan = await sendMessage(ch, V.groupPlan(t, g, cfg.channels["r" + g.name]));
-    if (plan) { await pinMessage(ch, plan.id); await mutate(tKey(channelId), (x) => { x.msgs.groups[g.name] = { ...(x.msgs.groups[g.name] || {}), plan: plan.id }; }); }
+    if (plan) { await mutate(tKey(channelId), (x) => { x.msgs.groups[g.name] = { ...(x.msgs.groups[g.name] || {}), plan: plan.id }; }); }
   }
   const fresh = await get(tKey(channelId));
   await refreshLive(fresh);
@@ -244,7 +243,7 @@ export async function refreshKOResultPanel(t, fresh = false) {
   const old = t.msgs.koRes;
   const id = fresh ? (await sendMessage(ch, V.koResultPanel(t)))?.id : await upsertMessage(ch, old, V.koResultPanel(t));
   if (fresh && old) await editMessage(ch, old, { ...V.koResultPanel({ ...t, status: "vorbei" }), components: [] });
-  if (id && id !== old) { await pinMessage(ch, id); await mutate(tKey(t.channelId), (x) => { x.msgs.koRes = id; }); }
+  if (id && id !== old) { await mutate(tKey(t.channelId), (x) => { x.msgs.koRes = id; }); }
 }
 
 export async function refreshResultPanel(t, gName) {
@@ -253,7 +252,7 @@ export async function refreshResultPanel(t, gName) {
   if (!ch || !g) return;
   const old = t.msgs.groups?.[gName]?.res;
   const id = await upsertMessage(ch, old, V.resultPanel(t, g));
-  if (id && id !== old) { await pinMessage(ch, id); await mutate(tKey(t.channelId), (x) => { x.msgs.groups[gName] = { ...(x.msgs.groups[gName] || {}), res: id }; }); }
+  if (id && id !== old) { await mutate(tKey(t.channelId), (x) => { x.msgs.groups[gName] = { ...(x.msgs.groups[gName] || {}), res: id }; }); }
 }
 
 // ---------- Größenvideos ----------
