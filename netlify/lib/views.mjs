@@ -491,9 +491,9 @@ export function koResultPanel(t) {
 /** Nachricht an den Gegner: bestätigen oder anderes Ergebnis */
 export function confirmAsk(m, reporter, users, h, a, pen, state = "offen") {
   const score = `${flagOf(m.home)} **${esc(m.home)} ${h}:${a}${pen ? ` (${pen[0]}:${pen[1]} i.E.)` : ""} ${esc(m.away)}** ${flagOf(m.away)}`;
-  const until = Math.floor((Date.now() + 2 * 60 * 1000) / 1000);
+  const until = Math.floor((Date.now() + 3 * 60 * 1000) / 1000); // 2 Min. Frist + bis zu 1 Min., bis der Timer läuft
   const text = {
-    offen: `📨 **${esc(reporter)}** hat für Spiel #${m.id} eingetragen: ${score}\n⏳ Bitte bestätigen – sonst gilt das Ergebnis automatisch <t:${until}:R>.`,
+    offen: `📨 **${esc(reporter)}** hat für Spiel #${m.id} eingetragen: ${score}\n⏳ Bitte innerhalb von 2 Minuten bestätigen – sonst gilt das Ergebnis automatisch (spätestens <t:${until}:R>).`,
     bestaetigt: `✅ Ergebnis bestätigt: ${score}`,
     auto: `✅ Ergebnis automatisch bestätigt (keine Reaktion in 2 Minuten): ${score}`,
     konflikt: `⚠️ Unterschiedliche Ergebnisse für Spiel #${m.id} – die Turnierleitung entscheidet.`,

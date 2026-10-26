@@ -60,6 +60,8 @@ export default async (req, context) => {
   if (!ok) return new Response("Ungültige Signatur", { status: 401 });
   const i = JSON.parse(body);
   if (i.type === 1) return json({ type: 1 });
+  // Zweiter Auslöser für die automatische Bestätigung (zusätzlich zum Minuten-Timer)
+  if (context?.waitUntil) context.waitUntil(F.runAutoConfirm().catch((e) => console.error("Auto-Bestätigung:", e)));
   // Protokoll für die Admins: Aktionen von Turnierleitung & Staff in den Admin-Kanal
   try {
     const text = auditEntry(i, await getConfig());
@@ -76,6 +78,19 @@ export default async (req, context) => {
   }
 };
 export const config = { path: "/api/interactions" };
+
+/** Nach dem Verknüpfen eines Kanals das passende Panel dort sofort (neu) posten */
+async function refreshLinkedPanel(key) {
+  if (key === "support") return SUP.refreshTicketPanel();
+  if (key === "bewerbung") return SUP.refreshApplyPanel();
+  const map = { rules: F.refreshRulesPanel, roles: F.refreshRolesPanel, reg: F.refreshRegPanel, team: F.refreshTeamPanel, over: F.refreshOverview, ban: B.refreshBanPanel };
+  if (map[key]) return map[key]();
+  const t = await F.activeTournament();
+  if (!t) return;
+  if (key === "kor" && t.koSize) return F.refreshKOResultPanel(t, true);
+  if (/^r[A-H]$/.test(key) && ["checkin", "gruppen"].includes(t.status) && t.groups.some((g) => g.name === key[1])) return F.refreshResultPanel(t, key[1]);
+  if (key === "ko" && t.koSize) return F.refreshBracket(t);
+}
 
 // ---------- Protokoll ----------
 function auditEntry(i, cfg) {
@@ -117,8 +132,10 @@ async function setup(i, context, cfg) {
   const sub = i.data.options[0], o = opts(sub.options);
   o.kanal = o.kanal || i.channel_id; // ohne Auswahl: aktueller Kanal
   if (sub.name === "kanal") {
-    await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[o.typ] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
-    return eph(`✅ **${CHANNEL_TYPES[o.typ]}** → <#${o.kanal}>`);
+    const ch = o.kanal || i.channel_id; // ohne Auswahl: der Kanal, in dem der Befehl ausgeführt wird
+    await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[o.typ] = ch; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
+    later(context, () => refreshLinkedPanel(o.typ));
+    return eph(`✅ **${CHANNEL_TYPES[o.typ]}** → <#${ch}>`);
   }
   if (sub.name === "rechte") {
     return background(i, context, async () => {
@@ -163,8 +180,10 @@ async function setup(i, context, cfg) {
   }
   if (sub.name === "gruppe") {
     const key = (o.art === "ergebnisse" ? "r" : "g") + o.gruppe;
-    await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[key] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
-    return eph(`✅ **${CHANNEL_TYPES[key]}** → <#${o.kanal}>`);
+    const ch = o.kanal || i.channel_id;
+    await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[key] = ch; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
+    later(context, () => refreshLinkedPanel(key));
+    return eph(`✅ **${CHANNEL_TYPES[key]}** → <#${ch}>`);
   }
   if (sub.name === "rollen") {
     return background(i, context, async () => {
@@ -176,15 +195,19 @@ async function setup(i, context, cfg) {
   if (sub.name === "panels") {
     return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); await (await import("../lib/trophies.mjs")).refreshTrophyPanel(); await SUP.refreshTicketPanel(); await SUP.refreshApplyPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Trophäenhalle, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht, Sperrliste, Support und Staff-Bewerbung gepostet bzw. aktualisiert."; });
   }
-  if (sub.name === "status") {
-    const lines = Object.entries(CHANNEL_TYPES).map(([k, n]) => `${cfg.channels?.[k] ? "✅" : "▫️"} **${n}**${cfg.channels?.[k] ? ` → <#${cfg.channels[k]}>` : ""}`);
+  if (sub.name === "status") return background(i, context, async () => {
+    // Prüfen, ob die verknüpften Kanäle noch existieren (gelöschte Kanäle erscheinen in Discord als „#unbekannt“)
+    const linked = Object.keys(CHANNEL_TYPES).filter((k) => cfg.channels?.[k]);
+    const exists = Object.fromEntries(await Promise.all(linked.map(async (k) => [k, !!(await discord(`/channels/${cfg.channels[k]}`))])));
+    const broken = linked.filter((k) => !exists[k]);
+    const lines = Object.entries(CHANNEL_TYPES).map(([k, n]) => !cfg.channels?.[k] ? `▫️ **${n}**` : exists[k] ? `✅ **${n}** → <#${cfg.channels[k]}>` : `❌ **${n}** → Kanal existiert nicht mehr – neu verknüpfen!`);
     const r = cfg.roles || {};
     const roleOk = r.manager && r.spieler && r.turnierleitung && GROUP_NAMES.every((g) => r.groups?.[g]) && ROUND_ROLES.every((x) => r.rounds?.[x]);
     const pr = await AS.setupProgress();
     const memOk = !!(await discord(`/guilds/${process.env.DISCORD_GUILD_ID}/members?limit=1`));
     const memLine = memOk ? "**Mitgliederliste:** ✅ lesbar (Willkommen & Rollen-Abgleich laufen)" : "**Mitgliederliste:** ❌ nicht lesbar – im Discord Developer Portal unter *Bot* den **Server Members Intent** einschalten. Ohne den gibt es keine Willkommensnachrichten.";
-    return eph(`${memLine}\n\n${pr?.left ? `⏳ **Einrichtung läuft noch:** ${pr.done}/${pr.total} erledigt\n\n` : ""}**Kanäle**\n${lines.join("\n")}\n\n**Rollen:** ${roleOk ? "✅ alle verknüpft" : "⚠️ noch nicht vollständig – `/cl-einrichten rollen`"}\n-# Gruppenkanäle brauchst du nur so viele, wie es Gruppen gibt (8 bei 32 Mannschaften).`);
-  }
+    return `${memLine}\n${broken.length ? `\n⚠️ **${broken.length} ${broken.length === 1 ? "verknüpfter Kanal existiert" : "verknüpfte Kanäle existieren"} nicht mehr** – im richtigen Kanal \`/cl-einrichten kanal\` bzw. \`/cl-einrichten gruppe\` ausführen.\n` : ""}\n${pr?.left ? `⏳ **Einrichtung läuft noch:** ${pr.done}/${pr.total} erledigt\n\n` : ""}**Kanäle**\n${lines.join("\n")}\n\n**Rollen:** ${roleOk ? "✅ alle verknüpft" : "⚠️ noch nicht vollständig – \`/cl-einrichten rollen\`"}\n-# Gruppenkanäle brauchst du nur so viele, wie es Gruppen gibt (8 bei 32 Mannschaften).`.slice(0, 1990);
+  });
   return eph("Unbekannter Befehl.");
 }
 

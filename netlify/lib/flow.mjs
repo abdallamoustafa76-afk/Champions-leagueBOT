@@ -350,6 +350,7 @@ async function closeAsk(t, m, state) {
 export async function runAutoConfirm() {
   const t0 = await activeTournament();
   if (!t0 || !["gruppen", "ko"].includes(t0.status)) return;
+  if (!T.autoConfirm(structuredClone(t0)).length) return; // nichts fällig → nichts schreiben
   const { value: t, result } = await mutate(tKey(t0.channelId), (t) => {
     const ids = T.autoConfirm(t);
     return { ids, events: ids.length ? T.advance(t) : [] };
