@@ -216,6 +216,8 @@ export async function doCheckinEnd(channelId) {
     if (plan) { await mutate(tKey(channelId), (x) => { x.msgs.groups[g.name] = { ...(x.msgs.groups[g.name] || {}), plan: plan.id }; }); }
   }
   const fresh = await get(tKey(channelId));
+  // Ergebnis-Panels von „Los geht's nach dem Check-in“ auf Spieltag 1 mit Knöpfen umstellen
+  for (const g of fresh.groups) await refreshResultPanel(fresh, g.name);
   await refreshLive(fresh);
   await handleEvents(fresh, result.events);
   return fresh;
