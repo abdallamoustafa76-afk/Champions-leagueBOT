@@ -236,7 +236,7 @@ async function manualCup(i, context) {
 async function admin(i, context, cfg) {
   const sub = i.data.options[0], o = opts(sub.options);
   if (sub.name === "anmeldeschluss") return background(i, context, async () => { const t = await get(tKey(i.channel_id)); if (!t || t.status !== "anmeldung") throw new Error("In diesem Kanal ist keine Anmeldung offen."); await F.doDraw(i.channel_id); return "✅ Anmeldung geschlossen und ausgelost."; });
-  if (sub.name === "checkin-ende") return background(i, context, async () => { const t = await resolveTournament(i); if (t.status !== "checkin") throw new Error("Es läuft gerade kein Check-in."); await F.doCheckinEnd(t.channelId); await F.doKickoff(t.channelId); return "✅ Check-in beendet – Spieltag 1 ist sofort freigegeben."; });
+  if (sub.name === "checkin-ende") return background(i, context, async () => { const t = await resolveTournament(i); if (t.status !== "checkin") throw new Error("Es läuft gerade kein Check-in."); await F.doCheckinEnd(t.channelId); await F.doKickoff(t.channelId); if (t.test) await F.playVirtualMatches(t.channelId); return "✅ Check-in beendet – Spieltag 1 ist sofort freigegeben."; });
   if (sub.name === "spiele") {
     const t = await resolveTournament(i);
     const open = T.currentMatches(t).filter((m) => m.status !== "fertig");
@@ -277,6 +277,21 @@ async function admin(i, context, cfg) {
       const t = (await F.activeTournament()) || (await EAF.latestTournament(i.channel_id));
       if (!t) throw new Error("Es gibt noch kein Turnier.");
       return `🎮 **EA-Daten fürs TOTT · ${t.name}**${EAF.eaEnabled() ? "" : "\n⛔ Das TOTT ist ausgeschaltet (EA_AUTO=0)."}\n${await EAF.eaStatus(t)}`.slice(0, 1990);
+    });
+  }
+  if (sub.name === "testcup-start") {
+    return background(i, context, async () => {
+      const size = Number(o.teams || 8);
+      const r = await F.startTestCup(i.channel_id, uidOf(i), size);
+      return `🧪 **Test-Cup erstellt** (${size} Teams).\n${r.mine ? `• Deine Mannschaft: ${flagOf(r.mine.club)} **${V.esc(r.mine.club)}** – du bekommst echte Gruppen- und KO-Rollen.` : "• ⚠️ Du hast keine eigene Mannschaft – registrier dich als Manager, damit du die Rollen mittesten kannst."}\n• ${r.virtual.length} Test-Teams (automatisch eingecheckt, spielen gegeneinander von selbst)\n\n**So geht's weiter:**\n1. \`/cl-admin anmeldeschluss\` → Auslosung\n2. Im Gruppenkanal einchecken, dann \`/cl-admin checkin-ende\`\n3. Deine Spiele über die Knöpfe melden (der Test-Gegner bestätigt nach 2 Min. automatisch) oder \`/cl-admin ergebnis\`\n4. \`/cl-admin testcup-weiter\` spielt die Test-Spiele sofort, sonst passiert es jede Minute von selbst\n5. \`/cl-admin rollen-check\` zum Prüfen der Rollen\n-# Keine Statistik, keine Trophäen, kein TOTT. Abbrechen: \`/cl-admin abbrechen\`.`;
+    });
+  }
+  if (sub.name === "testcup-weiter") {
+    return background(i, context, async () => {
+      const t = await F.activeTournament();
+      if (!t?.test) throw new Error("Gerade läuft kein Test-Cup (oder er ist noch nicht ausgelost).");
+      const n = await F.playVirtualMatches(t.channelId);
+      return n ? `🧪 ${n} Test-Spiele gespielt.` : "🧪 Gerade gibt es keine offenen Spiele zwischen Test-Teams – jetzt bist du dran (oder der Check-in läuft noch).";
     });
   }
   if (sub.name === "rollen-check") {

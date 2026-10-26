@@ -198,6 +198,13 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - Die Ergebniskanäle (A–H-Ergebnisse, KO-Ergebnisse) werden nicht angefasst – Ergebnisse und Größenvideos bleiben bis zum Aufräumen nach dem Cup.
 - Der Bot braucht dafür in diesen Kanälen das Recht **Nachrichten verwalten**.
 
+## Test-Cup (allein testen)
+
+- In einem **eigenen Test-Kanal** `/cl-admin testcup-start` (8 Teams = mit Halbfinale, 16 = mit Viertelfinale).
+- Mitspielen tut deine eigene Mannschaft (du musst Manager oder Co-VM sein) – du bekommst echte Gruppen-, KO-Phase- und Runden-Rollen. Die übrigen Teams sind Test-Teams aus freien Vereinen: automatisch eingecheckt, ihre Spiele gegeneinander spielt der Bot selbst (jede Minute oder sofort mit `/cl-admin testcup-weiter`).
+- Ablauf wie echt: `/cl-admin anmeldeschluss` → im Gruppenkanal einchecken → `/cl-admin checkin-ende` → eigene Spiele melden (der Test-Gegner bestätigt nach 2 Min. automatisch) → K.-o. → Finale.
+- Keine Statistik, keine Trophäen, kein TOTT, Siegerbild nur im Test-Kanal.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
@@ -222,6 +229,8 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
 | `/cl-einrichten rechte` | Nur die Rechte aller verknüpften Kanäle neu setzen |
+| `/cl-admin testcup-start [teams]` | Test-Cup allein testen: deine Mannschaft + Test-Teams, ohne Statistik |
+| `/cl-admin testcup-weiter` | Spiele zwischen Test-Teams sofort ausspielen |
 | `/cl-admin rollen-check` | Prüfen, ob alle Cup-Teilnehmer die richtigen Gruppen-/KO-Rollen haben, und korrigieren |
 | `/cl-admin willkommen-test` | Willkommensnachricht testweise für dich selbst posten |
 | `/cl-bewerbung öffnen · schließen` | Staff-Bewerbungen öffnen/schließen (nur Server-Admins) |

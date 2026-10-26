@@ -21,6 +21,7 @@ export default async () => {
     for (const t of await allTournaments()) if (["anmeldung", "checkin", "gruppen"].includes(t.status)) await step(`Turnier ${t.channelId}`, () => runTimers(t));
   });
   await step("Ergebnisse automatisch bestätigen", () => runAutoConfirm());
+  await step("Test-Cup", async () => { const F = await import("../lib/flow.mjs"); const t = await F.activeTournament(); if (t?.test) await F.playVirtualMatches(t.channelId); });
   await step("Rollen-Abgleich", () => syncManagerRoles(members));
   await step("Turnier-Rollen prüfen", () => reconcileCupRoles(members));
   await step("Inaktivität", () => dailyInactivity());

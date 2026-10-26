@@ -96,7 +96,7 @@ export function closeAndDraw(t) {
     rounds.forEach((pairs, ri) => pairs.forEach(([home, away]) => t.matches.push(newMatch(t, { phase: "gruppe", group: g.name, round: ri + 1, home, away }))));
   }
   t.status = "checkin";
-  t.checked = t.playing.filter(isFreilos); // Freilose sind automatisch „da“
+  t.checked = t.playing.filter((c) => isFreilos(c) || t.virtual?.includes(c)); // Freilose und Test-Teams sind automatisch „da“
   t.waitChecked = [];
   t.out = t.playing.filter(isFreilos);     // … verlieren aber jedes Spiel 0:3 und kommen nie weiter
   return { cancelled: false };

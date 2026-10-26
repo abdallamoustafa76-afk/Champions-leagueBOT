@@ -49,7 +49,7 @@ export async function runEaCheck(budgetMs = 22000) {
   if (!eaEnabled()) return;
   const start = Date.now(), left = () => budgetMs - (Date.now() - start);
   const recent = Date.now() - 36 * 3600000;
-  const list = (await allTournaments()).filter((t) => ["gruppen", "ko"].includes(t.status) || (t.status === "fertig" && t.createdAt > recent));
+  const list = (await allTournaments()).filter((t) => !t.test && (["gruppen", "ko"].includes(t.status) || (t.status === "fertig" && t.createdAt > recent)));
   for (const t of list) {
     if (left() < 3000) break;
     try { await checkTournament(t, left); } catch (e) { console.error(`TOTT ${t.channelId}:`, e?.message || e); }

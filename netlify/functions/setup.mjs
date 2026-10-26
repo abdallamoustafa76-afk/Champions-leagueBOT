@@ -86,6 +86,10 @@ const COMMANDS = [
       ] },
       { type: 1, name: "ea-status", description: "TOTT: Zeigen, welche Mannschaften mit EA verknüpft sind und wie viele Daten gesammelt wurden" },
       { type: 1, name: "tott", description: "TOTT des letzten Turniers sofort (neu) posten" },
+      { type: 1, name: "testcup-start", description: "Test-Cup allein testen: deine Mannschaft + Test-Teams, ohne Statistik", options: [
+        { type: 4, name: "teams", description: "Anzahl Teams (8 = mit Halbfinale, 16 = mit Viertelfinale)", required: false, choices: [{ name: "8 Teams", value: 8 }, { name: "16 Teams", value: 16 }] },
+      ] },
+      { type: 1, name: "testcup-weiter", description: "Spiele zwischen Test-Teams sofort ausspielen" },
       { type: 1, name: "rollen-check", description: "Prüfen, ob alle Cup-Teilnehmer die richtigen Gruppen-/KO-Rollen haben, und korrigieren" },
       { type: 1, name: "willkommen-test", description: "Willkommensnachricht testweise für dich selbst posten" },
       { type: 1, name: "verein-freigeben", description: "Einen Verein freigeben (z. B. bei Streit)", options: [

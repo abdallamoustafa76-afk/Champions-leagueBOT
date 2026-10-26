@@ -4,7 +4,7 @@ import { sendMessage, editMessage, upsertMessage, sendWithFile, deleteMessage } 
 import { enqueue } from "./roles.mjs";
 import * as T from "./tournament.mjs";
 import * as V from "./views.mjs";
-import { DAYS, ROUND_ROLES, RULES_VERSION, flagOf } from "./data.mjs";
+import { DAYS, ROUND_ROLES, RULES_VERSION, CLUBS, flagOf } from "./data.mjs";
 import { viennaParts, viennaAt, shortDate, todayKey } from "./time.mjs";
 import { setNick, nickFor } from "./names.mjs";
 import { scheduleCleanup, purgeExcept } from "./cleanup.mjs";
@@ -423,23 +423,28 @@ async function finishCup(t, cfg) {
   // Statistik: alle eingecheckten Mannschaften haben gespielt
   const today = todayKey();
   let titleNo = 1;
-  await mutate("clubs", (clubs) => {
-    for (const c of t.checked) if (clubs[c]) { clubs[c].cups = (clubs[c].cups || 0) + 1; clubs[c].lastPlayed = today; clubs[c].warned = null; }
-    if (clubs[t.champion]) { clubs[t.champion].titles = (clubs[t.champion].titles || 0) + 1; titleNo = clubs[t.champion].titles; }
-  }, { initial: {} });
+  if (!t.test) {
+    await mutate("clubs", (clubs) => {
+      for (const c of t.checked) if (clubs[c]) { clubs[c].cups = (clubs[c].cups || 0) + 1; clubs[c].lastPlayed = today; clubs[c].warned = null; }
+      if (clubs[t.champion]) { clubs[t.champion].titles = (clubs[t.champion].titles || 0) + 1; titleNo = clubs[t.champion].titles; }
+    }, { initial: {} });
+  }
   await set("active", null);
   await scheduleCleanup(t);
-  const TR = await import("./trophies.mjs");
-  await TR.recordCup(t);
-  await TR.refreshTrophyPanel();
+  if (!t.test) {
+    const TR = await import("./trophies.mjs");
+    await TR.recordCup(t);
+    await TR.refreshTrophyPanel();
+  }
   const f = t.matches.find((m) => m.final && m.round === t.koRound);
   const finalLine = `${f.home} ${f.h}:${f.a}${f.pen ? ` (${f.pen[0]}:${f.pen[1]} i.E.)` : ""} ${f.away}`;
-  await sendMessage(t.channelId, { content: `🏆 **Das Turnier ist beendet!** Glückwunsch an ${flagOf(t.champion)} **${V.esc(t.champion)}**!${cfg.channels.hof ? ` Das Siegerbild steht in <#${cfg.channels.hof}>.` : ""}` });
+  const hofCh = t.test ? t.channelId : cfg.channels.hof; // Test-Cup: Siegerbild nur im Turnierkanal, nicht in der Hall of Fame
+  await sendMessage(t.channelId, { content: `🏆 **Das Turnier ist beendet!** Glückwunsch an ${flagOf(t.champion)} **${V.esc(t.champion)}**!${t.test ? "\n🧪 Test-Cup: keine Statistik, keine Trophäen, kein TOTT." : cfg.channels.hof ? ` Das Siegerbild steht in <#${cfg.channels.hof}>.` : ""}` });
   if (cfg.channels.ko) await sendMessage(cfg.channels.ko, { content: "🏆 **Das Turnier ist beendet!** Alle Runden-Rollen werden entfernt." });
   await refreshBracket(t);
   await refreshKOResultPanel(await get(tKey(t.channelId)));
   await refreshSignup(t);
-  if (cfg.channels.hof) {
+  if (hofCh) {
     const names = await displayNames(t.podium.map((c) => (t.members[c] || [])[0]).filter(Boolean));
     const { hallOfFameImage } = await import("./image.mjs"); // erst hier laden, damit der Bot auch ohne Bild-Modul startet
     const img = await hallOfFameImage({
@@ -447,7 +452,7 @@ async function finishCup(t, cfg) {
       title: t.name, sub: `${t.fmt}er-Format · Finale: ${finalLine}`, seed: Date.now() % 1000,
     }).catch((e) => { console.error("Siegerbild:", e); return null; });
     const text = V.hofText(t, t.members, titleNo, finalLine);
-    if (img) await sendWithFile(cfg.channels.hof, text, "hall-of-fame.png", img); else await sendMessage(cfg.channels.hof, text);
+    if (img) await sendWithFile(hofCh, text, "hall-of-fame.png", img); else await sendMessage(hofCh, text);
   }
 }
 
@@ -488,3 +493,51 @@ export async function allTournaments() {
 }
 
 export { ROUND_ROLES };
+
+// ---------- Test-Cup (allein testen) ----------
+/**
+ * Startet einen Test-Cup im Kanal: deine eigene Mannschaft (falls du Manager/Co-VM bist) + virtuelle Test-Teams
+ * aus freien Vereinen. Test-Teams sind automatisch eingecheckt, ihre Spiele gegeneinander spielt der Bot selbst.
+ * Keine Statistik, keine Trophäen, kein TOTT, Siegerbild nur im Turnierkanal.
+ */
+export async function startTestCup(channelId, uid, size = 8) {
+  const busy = await activeTournament();
+  if (busy && T.ACTIVE.includes(busy.status)) throw new Error("Es läuft gerade ein anderer Cup – erst abbrechen oder fertig spielen.");
+  const here = await get(tKey(channelId));
+  if (here && !here.test && T.ACTIVE.concat("anmeldung").includes(here.status)) throw new Error("In diesem Kanal läuft eine echte Anmeldung – bitte einen eigenen Test-Kanal nehmen.");
+  const clubs = await getClubs();
+  const mine = clubOfUser(clubs, uid);
+  const free = CLUBS.map((c) => c.name).filter((n) => !clubs[n]);
+  for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
+  const virtual = free.slice(0, size - (mine ? 1 : 0));
+  if (virtual.length < size - (mine ? 1 : 0)) throw new Error("Nicht genug freie Vereine für einen Test-Cup.");
+  await launchTournament({ channelId, name: "🧪 Test-Cup", times: timesFromKickoff(Date.now() + 3 * 3600000) }, { replace: true });
+  const { value: t } = await mutate(tKey(channelId), (x) => { x.test = true; x.virtual = virtual; x.reg = [...(mine ? [mine.club] : []), ...virtual]; });
+  await refreshSignup(t);
+  return { mine, virtual };
+}
+
+/** Spiele zwischen zwei Test-Teams sofort mit Zufallsergebnis abschließen (auch über mehrere Runden). */
+export async function playVirtualMatches(channelId) {
+  let played = 0;
+  for (let loop = 0; loop < 12; loop++) {
+    const t0 = await get(tKey(channelId));
+    if (!t0?.test || !["gruppen", "ko"].includes(t0.status)) break;
+    const v = new Set(t0.virtual || []);
+    const todo = T.currentMatches(t0).filter((m) => m.status !== "fertig" && v.has(m.home) && v.has(m.away) && T.isEditable(t0, m));
+    if (!todo.length) break;
+    for (const m0 of todo) {
+      const h = Math.floor(Math.random() * 5), a = Math.floor(Math.random() * 5);
+      const { value: t, result } = await mutate(tKey(channelId), (t) => {
+        const m = t.matches.find((x) => x.id === m0.id);
+        if (!m || m.status === "fertig") return null;
+        Object.assign(m, { h, a, pen: m.phase === "ko" && h === a ? (Math.random() < 0.5 ? [5, 4] : [4, 5]) : null, status: "fertig", auto: true });
+        return { events: T.advance(t) };
+      });
+      if (!result) continue;
+      played++;
+      await afterResult(t, t.matches.find((x) => x.id === m0.id), result.events);
+    }
+  }
+  return played;
+}
