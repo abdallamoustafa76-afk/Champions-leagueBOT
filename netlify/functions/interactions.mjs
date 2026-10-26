@@ -110,6 +110,13 @@ async function setup(i, context, cfg) {
       ].join("\n");
     });
   }
+  if (sub.name === "zurücksetzen") {
+    const all = o.umfang === "all";
+    return eph(all
+      ? "⚠️ **Wirklich ALLES zurücksetzen?**\nGelöscht werden: Kanal- und Rollen-Verknüpfungen, Wochenplan, Panels **und** alle Vereine/Manager, Sperren, Regel-Bestätigungen, Turniere und Statistiken. Spitznamen werden zurückgesetzt.\nDeine Discord-Kanäle und -Rollen bleiben bestehen. Das kann nicht rückgängig gemacht werden."
+      : "⚠️ **Einrichtung zurücksetzen?**\nGelöscht werden: Kanal- und Rollen-Verknüpfungen, Wochenplan und die Panel-Posts. Vereine, Sperren und Turniere bleiben erhalten.\nDeine Discord-Kanäle und -Rollen bleiben bestehen.",
+      { components: [{ type: 1, components: [{ type: 2, style: 2, label: "Abbrechen", custom_id: "reset_no" }, { type: 2, style: 4, label: all ? "Ja, alles zurücksetzen" : "Ja, Einrichtung zurücksetzen", custom_id: `reset_ok:${all ? "all" : "setup"}` }] }] });
+  }
   if (sub.name === "gruppe") {
     const key = (o.art === "ergebnisse" ? "r" : "g") + o.gruppe;
     await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[key] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
@@ -240,6 +247,17 @@ async function resultOpen(i) {
 async function component(i, context) {
   const cfg = await getConfig();
   const id = i.data.custom_id, uid = uidOf(i);
+
+  // --- Zurücksetzen ---
+  if (id === "reset_no") return reply(i, { content: "Abgebrochen – nichts wurde verändert.", components: [] });
+  if (id.startsWith("reset_ok:")) {
+    if (!isAdmin(i, cfg)) return reply(i, { content: "Das darf nur die Turnierleitung.", components: [] });
+    const scope = id.split(":")[1];
+    return background(i, context, async () => {
+      const r = await AS.resetBot(scope);
+      return `✅ **${scope === "all" ? "Alles" : "Einrichtung"} zurückgesetzt.** ${r.deleted} Panel-Posts gelöscht${scope === "all" ? `, ${r.nicks} Spitznamen zurückgesetzt` : ""}.\nNeu einrichten mit \`/cl-einrichten alles\`.`;
+    }, { update: true });
+  }
 
   // --- Rollenauswahl ---
   if (id === "role_player") {

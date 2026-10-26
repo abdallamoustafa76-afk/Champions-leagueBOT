@@ -23,6 +23,12 @@ const COMMANDS = [
         { type: 7, name: "kanal", description: "Leer lassen = der Kanal, in dem du gerade schreibst", required: false, channel_types: [0, 5] },
       ] },
       { type: 1, name: "rollen", description: "Rollen verknüpfen bzw. fehlende anlegen" },
+      { type: 1, name: "zurücksetzen", description: "Einrichtung (oder alles) zurücksetzen – mit Sicherheitsabfrage", options: [
+        { type: 3, name: "umfang", description: "Was soll zurückgesetzt werden?", required: true, choices: [
+          { name: "Nur Einrichtung (Kanäle, Wochenplan, Panels)", value: "setup" },
+          { name: "Alles (auch Vereine, Sperren, Turniere, Regeln)", value: "all" },
+        ] },
+      ] },
       { type: 1, name: "panels", description: "Panels posten: Regelwerk, Rollenauswahl, Registrieren, Meine Mannschaft, Übersicht, Sperrliste" },
       { type: 1, name: "status", description: "Zeigen, was schon eingerichtet ist" },
     ],

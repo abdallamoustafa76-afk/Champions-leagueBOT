@@ -51,6 +51,15 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - `rechte_setzen: False` → Rechte deiner Kanäle nicht verändern
 - Danach die Bot-Rolle in der Rollenliste ganz nach oben ziehen.
 
+### Zurücksetzen
+```
+/cl-einrichten zurücksetzen umfang: Nur Einrichtung
+/cl-einrichten zurücksetzen umfang: Alles
+```
+- **Nur Einrichtung:** löscht Kanal- und Rollen-Verknüpfungen, Wochenplan und die Panel-Posts. Vereine, Sperren und Turniere bleiben.
+- **Alles:** zusätzlich Vereine/Manager, Sperren, Regel-Bestätigungen, Turniere und Statistiken; Spitznamen werden zurückgesetzt.
+- Discord-Kanäle und -Rollen selbst werden nie gelöscht. Vor dem Zurücksetzen kommt immer eine Sicherheitsabfrage.
+
 ### Oder Schritt für Schritt
 
 1. `/cl-einrichten rollen` → verknüpft vorhandene Rollen (Turnierleitung, Moderator, Manager, Spieler) und legt fehlende an (Gruppe A–H, Achtelfinale, Viertelfinale, Halbfinale, Finale, Spiel um Platz 3).

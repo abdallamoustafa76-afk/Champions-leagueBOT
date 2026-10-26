@@ -1,6 +1,6 @@
 // /cl-einrichten alles: Rollen, Kanäle erkennen/anlegen, Rechte, Wochenplan, Panels – in einem Rutsch.
-import { get, mutate, getConfig } from "./store.mjs";
-import { discord, getRoles, createRole } from "./discord.mjs";
+import { get, set, del, keys, mutate, getConfig } from "./store.mjs";
+import { discord, getRoles, createRole, deleteMessage } from "./discord.mjs";
 import { GROUP_NAMES, ROUND_ROLES, DAYS, CHANNEL_TYPES } from "./data.mjs";
 import { parseTime, toMinutes } from "./time.mjs";
 
@@ -166,3 +166,33 @@ export async function setupProgress() {
 }
 
 export { PLAN, CHANNEL_TYPES };
+
+/**
+ * Zurücksetzen.
+ * scope "setup": Kanal-Verknüpfungen, Rollen-Verknüpfungen, Wochenplan, Panels (Posts werden gelöscht)
+ * scope "all":   zusätzlich Vereine, Sperren, Regel-Bestätigungen, Turniere, Statistiken
+ * Discord-Kanäle und -Rollen selbst bleiben bestehen.
+ */
+export async function resetBot(scope = "setup") {
+  const cfg = await getConfig();
+  const panels = (await get("panels")) || {};
+  const ch = cfg.channels || {};
+  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], ...(panels.over || []).map((id) => [ch.over, id])];
+  let deleted = 0;
+  for (const [c, id] of msgs) if (c && id && (await deleteMessage(c, id))) deleted++;
+  for (const k of ["config", "panels", "zeitplan", "setupjobs"]) await del(k);
+  const res = { deleted, scope, nicks: 0 };
+  if (scope === "all") {
+    const clubs = (await get("clubs")) || {};
+    const { setNick } = await import("./names.mjs");
+    const started = Date.now();
+    for (const c of Object.values(clubs)) {
+      if (Date.now() - started > 12000) break; // Zeitlimit – restliche Spitznamen bleiben
+      if (c.manager && (await setNick(c.manager, c.managerOrigNick ?? null))) res.nicks++;
+      if (c.co && (await setNick(c.co, c.coOrigNick ?? null))) res.nicks++;
+    }
+    for (const k of ["clubs", "bans", "rules", "mreq", "managers", "knownMembers", "rolequeue", "autodelete", "daily", "active"]) await del(k);
+    for (const k of await keys("t:")) await del(k);
+  }
+  return res;
+}
