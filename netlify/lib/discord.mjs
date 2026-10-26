@@ -49,6 +49,8 @@ export async function upsertMessage(ch, id, payload) {
     if (ok) return id;
   }
   const msg = await sendMessage(ch, payload);
+  // Alte Nachricht entfernen (z. B. beim Wechsel auf das neue Layout), damit nichts doppelt steht
+  if (msg && id) await deleteMessage(ch, id);
   return msg?.id ?? null;
 }
 

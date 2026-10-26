@@ -1,6 +1,6 @@
 // Abläufe mit Discord-Auswirkungen: Posts, Rollen, Phasenwechsel.
 import { get, set, del, mutate, keys, getConfig, getClubs, tKey } from "./store.mjs";
-import { sendMessage, editMessage, upsertMessage, sendWithFile, pinMessage } from "./discord.mjs";
+import { sendMessage, editMessage, upsertMessage, sendWithFile, pinMessage, deleteMessage } from "./discord.mjs";
 import { enqueue } from "./roles.mjs";
 import * as T from "./tournament.mjs";
 import * as V from "./views.mjs";
@@ -108,7 +108,7 @@ export async function launchTournament({ channelId, name, times, day, date }, { 
     if (!replace) throw new Error("In diesem Kanal läuft bereits ein Turnier.");
     if (T.ACTIVE.includes(old.status)) throw new Error("In diesem Kanal läuft gerade noch ein Cup.");
     old.status = "geloescht";
-    if (old.msgs.panel) await editMessage(channelId, old.msgs.panel, V.signupPanel(old, await getClubs()));
+    if (old.msgs.panel) await upsertMessage(channelId, old.msgs.panel, V.signupPanel(old, await getClubs()));
   }
   const t = T.createTournament({ channelId, name, times, day, date });
   const msg = await sendMessage(channelId, V.signupPanel(t, await getClubs()));
@@ -119,7 +119,9 @@ export async function launchTournament({ channelId, name, times, day, date }, { 
 }
 
 export async function refreshSignup(t) {
-  if (t.msgs.panel) await editMessage(t.channelId, t.msgs.panel, V.signupPanel(t, await getClubs()));
+  if (!t.msgs.panel) return;
+  const id = await upsertMessage(t.channelId, t.msgs.panel, V.signupPanel(t, await getClubs()));
+  if (id && id !== t.msgs.panel) await mutate(tKey(t.channelId), (x) => { x.msgs.panel = id; });
 }
 
 /** Zeiten aus dem Anpfiff: Anmeldeschluss/Auslosung 60 Min. vorher, Check-in-Ende 5 Min. vorher */

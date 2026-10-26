@@ -3,6 +3,14 @@ import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS
 import { fmtOf, nextFmt, standings, currentMatches, winner, koRoundName } from "./tournament.mjs";
 
 const FOOTER = { text: "Champions League Bot" };
+
+// ---------- Neues Discord-Layout („Components V2“): alles in einem Kasten ----------
+const V2 = 1 << 15;
+const box = (...children) => ({ type: 17, accent_color: COLOR, components: children.flat().filter(Boolean) });
+const txt = (content) => ({ type: 10, content });
+const line = (divider = true) => ({ type: 14, divider, spacing: 1 });
+const gallery = (url) => ({ type: 12, items: [{ media: { url } }] });
+const section = (texts, thumb) => ({ type: 9, components: texts.map(txt), accessory: { type: 11, media: { url: thumb } } });
 export const esc = (s) => String(s).replace(/([*_`~|\\>])/g, "\\$1");
 const unix = (ms) => Math.floor(ms / 1000);
 const hhmm = (ms) => `<t:${unix(ms)}:t>`;
@@ -16,19 +24,18 @@ const pad = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
 // ---------- Team registrieren ----------
 export function regPanel(clubs) {
   const taken = Object.keys(clubs).length;
-  const lines = LEAGUES.map((l) => `${l.flag} **${l.name}** – ${l.clubs.filter((c) => !clubs[c]).length} frei`);
+  const lines = LEAGUES.map((l) => `${l.flag} **${l.name}** · ${l.clubs.filter((c) => !clubs[c]).length} frei`);
   return {
-    embeds: [
-      { color: COLOR, image: { url: `${site()}/banner-registrieren.jpg` } },
-      {
-        color: COLOR,
-        description:
-          "Wähle eine Liga und deine Mannschaft. Jede Mannschaft gibt es nur einmal – wer zuerst kommt, wird Manager.\n\n" +
-          `**Vergeben:** ${taken}/${CLUBS.length} · **Frei:** ${CLUBS.length - taken}\n\n` + lines.join("\n"),
-        footer: FOOTER,
-      },
-    ],
-    components: [row(btn("Mannschaft registrieren", "reg_start", 1, { emoji: { name: "👕" } }))],
+    flags: V2,
+    components: [box(
+      gallery(`${site()}/banner-registrieren.jpg`),
+      txt(`## Mannschaft registrieren\nWähle eine Liga und deine Mannschaft. Jede Mannschaft gibt es nur einmal – wer zuerst kommt, wird Manager.\n👕 **${taken}/${CLUBS.length} vergeben** · ${CLUBS.length - taken} frei`),
+      line(),
+      txt("### 🌍 Ligen\n" + lines.join("\n")),
+      line(),
+      row(btn("Mannschaft registrieren", "reg_start", 1, { emoji: { name: "👕" } })),
+      txt("-# Champions League Bot · Pro Manager eine Mannschaft"),
+    )],
   };
 }
 
@@ -168,29 +175,35 @@ export function signupPanel(t, clubs = {}) {
   const tl = (c, k, waitList) => isFreilos(c)
     ? `${num(k)} 🎟️ **Freilos**`
     : `${num(k)} ${flagOf(c)} **${esc(c)}**${who(c)}${t.status === "checkin" && waitList ? (t.waitChecked.includes(c) ? " ✅" : " ⏳") : ""}`;
-  const lines = playing.map((c, k) => tl(c, k));
   const freeCount = playing.filter(isFreilos).length;
-  const fields = lines.length
-    ? [
-        { name: `👥 Mannschaften (${playing.length}${f && !closed ? "/" + f : ""})${freeCount ? ` · davon ${freeCount} Freilos` : ""}`, value: lines.slice(0, 16).join("\n") },
-        ...(lines.length > 16 ? [{ name: "\u200b", value: lines.slice(16).join("\n") }] : []),
-      ]
-    : [{ name: "👥 Mannschaften", value: "_Noch keine Anmeldungen_" }];
-  if (wait.length) fields.push({ name: "⏳ Warteliste", value: wait.map((c, k) => tl(c, k, true)).join("\n") + "\n-# Rückt nach, wenn eine Mannschaft nicht eincheckt." });
-  if (freeCount) fields.push({ name: "\u200b", value: "-# 🎟️ Wer gegen ein Freilos spielt, gewinnt automatisch 3:0. Freilose kommen nie weiter." });
+  const target = f || 8;
   const times = t.times;
-  const description =
-    `${hhmm(times.close)} Anmeldeschluss · ${hhmm(times.close)} Auslosung · ${hhmm(times.checkinEnd)} Check-in-Ende · ${hhmm(times.kickoff)} Anpfiff\n\n` +
-    `${STATUS[t.status]}\n\n` + formatBlock(closed ? t.playing.length || n : n, closed);
-  const components = [];
-  if (t.status === "anmeldung") components.push(row(btn("Anmelden", "cup_join", 1, { emoji: { name: "⭐" } }), btn("Abmelden", "cup_leave")));
-  if (t.status === "checkin" && t.wait.length) components.push(row(btn("Warteliste: Einchecken", "cup_waitci", 3, { emoji: { name: "✅" } })));
+  const head = [
+    `## ${esc(t.name)}`,
+    `${STATUS[t.status]}\n⏰ **Anpfiff** <t:${unix(times.kickoff)}:F> · <t:${unix(times.kickoff)}:R>\n👥 **${playing.length}/${closed ? playing.length : target} Mannschaften** · 20 Min pro Runde`,
+  ];
+  const teamsText =
+    `### 👥 Mannschaften (${playing.length}${f && !closed ? "/" + f : ""})${freeCount ? ` · davon ${freeCount} Freilos` : ""}\n` +
+    (playing.length ? playing.map((c, k) => tl(c, k)).join("\n") : "_Noch keine Anmeldungen_") +
+    (wait.length ? `\n\n**⏳ Warteliste**\n${wait.map((c, k) => tl(c, k, true)).join("\n")}\n-# Rückt nach, wenn eine Mannschaft nicht eincheckt.` : "") +
+    (freeCount ? "\n-# 🎟️ Wer gegen ein Freilos spielt, gewinnt automatisch 3:0. Freilose kommen nie weiter." : "");
+  const buttons = [];
+  if (t.status === "anmeldung") buttons.push(row(btn("Anmelden", "cup_join", 1, { emoji: { name: "⭐" } }), btn("Abmelden", "cup_leave")));
+  if (t.status === "checkin" && t.wait.length) buttons.push(row(btn("Warteliste: Einchecken", "cup_waitci", 3, { emoji: { name: "✅" } })));
   return {
-    embeds: [
-      { color: COLOR, image: { url: `${site()}/banner-anmeldung.jpg` } },
-      { color: COLOR, title: t.name.toUpperCase(), description: description.slice(0, 4096), fields, footer: FOOTER },
-    ],
-    components,
+    flags: V2,
+    components: [box(
+      gallery(`${site()}/banner-anmeldung.jpg`),
+      txt(head.join("\n")),
+      line(),
+      txt(formatBlock(closed ? t.playing.length || n : n, closed).replace(/^\*\*🏟️ Format: (\d+)er\*\*/, "### 🏟️ Turnierplan: $1er-Format").replace(/^\*\*⚠️ Noch kein Format\*\*/, "### ⚠️ Noch kein Format")),
+      line(),
+      txt(`### ⏰ Ablauf\n${hhmm(times.close)} Anmeldeschluss · ${hhmm(times.close)} Auslosung · ${hhmm(times.checkinEnd)} Check-in-Ende · ${hhmm(times.kickoff)} Anpfiff`),
+      line(),
+      txt(teamsText.slice(0, 3000)),
+      ...(buttons.length ? [line(false), ...buttons] : []),
+      txt("-# Champions League Bot"),
+    )],
   };
 }
 
