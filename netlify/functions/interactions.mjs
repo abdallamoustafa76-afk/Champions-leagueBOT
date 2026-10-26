@@ -120,6 +120,15 @@ async function setup(i, context, cfg) {
     await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[o.typ] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
     return eph(`✅ **${CHANNEL_TYPES[o.typ]}** → <#${o.kanal}>`);
   }
+  if (sub.name === "rechte") {
+    return background(i, context, async () => {
+      const n = await AS.setupPerms();
+      if (!n) return "Es sind noch keine Kanäle verknüpft.";
+      await AS.processSetupJobs(14000);
+      const pr = await AS.setupProgress();
+      return `🔒 **Rechte für ${n} Kanäle werden gesetzt.**\n• Willkommen, Regelwerk, Rollenauswahl: für **alle** sichtbar\n• Alle anderen Bot-Kanäle: erst mit Rolle **Spieler** oder **Manager** (Staff sieht alles)\n${pr?.left ? `⏳ Noch ${pr.left} offen – läuft im Hintergrund weiter (ca. 1 Minute).` : "✅ Fertig."}\n-# Deine eigenen Kanäle (z. B. Community) stellst du am besten über die Kategorie ein.`;
+    });
+  }
   if (sub.name === "alles") {
     return background(i, context, async () => {
       const r = await AS.setupAll({ create: o.fehlende_erstellen ?? true, perms: o.rechte_setzen ?? true, kickoff: o.anpfiff ?? "20:00" });
@@ -133,7 +142,7 @@ async function setup(i, context, cfg) {
         `🔎 **${found.length} Kanäle erkannt:** ${found.map(name).join(", ") || "–"}`,
         r.missing.length ? `🆕 **${r.missing.length} Kanäle werden angelegt:** ${r.missing.map((m) => name(m.key)).join(", ")}` : "🆕 Keine fehlenden Kanäle.",
         r.perms ? "🔒 Rechte werden gesetzt (wer welchen Kanal sieht)." : "🔒 Rechte nicht verändert.",
-        `🗓️ Wochenplan: Anpfiff ${o.anpfiff ?? "20:00"} für alle Tageskanäle.`,
+        `🗓️ Wochenplan: neue Tageskanäle mit Anpfiff ${o.anpfiff ?? "20:00"} – schon eingestellte Tage bleiben unverändert.`,
         "",
         pr?.left ? `⏳ **${pr.done}/${pr.total} erledigt** – der Rest läuft automatisch weiter (ca. 1–3 Minuten). Danach mit \`/cl-einrichten status\` prüfen.` : "🎉 **Alles erledigt!** Prüfen mit `/cl-einrichten status`.",
         "",

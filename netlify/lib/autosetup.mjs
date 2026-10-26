@@ -12,26 +12,26 @@ const fancy = (s) => [...s].map((ch) => { const c = ch.charCodeAt(0); return c >
 
 /** Kanal-Plan: Schlüssel, Name beim Anlegen, Kategorie, Rechte-Profil */
 const PLAN = [
-  { key: "welcome", name: "👋・" + fancy("Willkommen"), cat: "info", prof: "public" },
-  { key: "rules", name: "📜・" + fancy("Regelwerk"), cat: "info", prof: "public" },
-  { key: "roles", name: "🎭・" + fancy("Rollenauswahl"), cat: "info", prof: "public" },
-  { key: "notify", name: "🔔・" + fancy("Benachrichtigungen"), cat: "info", prof: "public" },
+  { key: "welcome", name: "👋・" + fancy("Willkommen"), cat: "info", prof: "entry" },
+  { key: "rules", name: "📜・" + fancy("Regelwerk"), cat: "info", prof: "entry" },
+  { key: "roles", name: "🎭・" + fancy("Rollenauswahl"), cat: "info", prof: "entry" },
+  { key: "notify", name: "🔔・" + fancy("Benachrichtigungen"), cat: "info", prof: "members" },
   { key: "reg", name: "📝・" + fancy("Team-registrieren"), cat: "teams", prof: "managers" },
   { key: "team", name: "🛡️・" + fancy("Meine-Mannschaft"), cat: "teams", prof: "managers" },
-  { key: "over", name: "📋・" + fancy("Mannschaftsuebersicht"), cat: "teams", prof: "public" },
-  ...DAYS.map((d, i) => ({ key: "day" + (i + 1), name: "🗓️・" + fancy(d), cat: "cl", prof: "public", day: i + 1 })),
-  { key: "live", name: "📺・" + fancy("Live-Spielplan"), cat: "cl", prof: "public" },
-  { key: "hof", name: "🏆・" + fancy("Hall-of-Fame"), cat: "cl", prof: "public" },
-  { key: "tott", name: "⭐・" + fancy("TOTT"), cat: "cl", prof: "public" },
-  { key: "trophy", name: "🏅・" + fancy("Trophaeenhalle"), cat: "cl", prof: "public" },
-  { key: "ban", name: "🚫・" + fancy("Sperrliste"), cat: "cl", prof: "public" },
+  { key: "over", name: "📋・" + fancy("Mannschaftsuebersicht"), cat: "teams", prof: "members" },
+  ...DAYS.map((d, i) => ({ key: "day" + (i + 1), name: "🗓️・" + fancy(d), cat: "cl", prof: "members", day: i + 1 })),
+  { key: "live", name: "📺・" + fancy("Live-Spielplan"), cat: "cl", prof: "members" },
+  { key: "hof", name: "🏆・" + fancy("Hall-of-Fame"), cat: "cl", prof: "members" },
+  { key: "tott", name: "⭐・" + fancy("TOTT"), cat: "cl", prof: "members" },
+  { key: "trophy", name: "🏅・" + fancy("Trophaeenhalle"), cat: "cl", prof: "members" },
+  { key: "ban", name: "🚫・" + fancy("Sperrliste"), cat: "cl", prof: "members" },
   { key: "log", name: "📢・" + fancy("Turnierleitung"), cat: "cl", prof: "staff" },
   ...GROUP_NAMES.flatMap((g) => [
     { key: "g" + g, name: "⚽・" + fancy("Gruppe-" + g), cat: "groups", prof: "group:" + g },
     { key: "r" + g, name: "📋・" + fancy(g + "-Ergebnisse"), cat: "groups", prof: "groupres:" + g },
   ]),
-  { key: "support", name: "🎫・" + fancy("Support"), cat: "support", prof: "public" },
-  { key: "bewerbung", name: "📋・" + fancy("Staff-Bewerbung"), cat: "support", prof: "public" },
+  { key: "support", name: "🎫・" + fancy("Support"), cat: "support", prof: "members" },
+  { key: "bewerbung", name: "📋・" + fancy("Staff-Bewerbung"), cat: "support", prof: "members" },
   { key: "admin", name: "⚙️・" + fancy("Admin"), cat: "staff", prof: "admins" },
   { key: "ko", name: "⚔️・" + fancy("KO-Phase"), cat: "ko", prof: "ko" },
   { key: "kor", name: "📋・" + fancy("KO-Ergebnisse"), cat: "ko", prof: "kores" },
@@ -63,7 +63,10 @@ function overwrites(prof, roles) {
   const see = (id, ...extra) => (id ? { id, type: 0, allow: bits(P.VIEW, P.HISTORY, ...extra), deny: "0" } : null);
   const seeRO = (id) => (id ? { id, type: 0, allow: bits(P.VIEW, P.HISTORY), deny: bits(P.SEND) } : null);
   const lead = see(roles.turnierleitung, P.SEND, P.FILES);
-  if (prof === "public") return [ro];
+  // Eingang: Willkommen, Regelwerk, Rollenauswahl – sieht jeder, auch ohne Rolle
+  if (prof === "entry" || prof === "public") return [ro];
+  // Alles andere: erst mit Rolle Spieler oder Manager (Staff sieht immer mit)
+  if (prof === "members") return [hide, seeRO(roles.spieler), seeRO(roles.manager), seeRO(roles.moderator), seeRO(roles.support), lead].filter(Boolean);
   if (prof === "managers") return [hide, seeRO(roles.manager), lead].filter(Boolean);
   if (prof === "staff") return [hide, lead, see(roles.moderator, P.SEND)].filter(Boolean);
   if (prof === "admins") return [hide]; // nur Server-Admins (sehen ohnehin alles) und der Bot
@@ -119,6 +122,19 @@ export async function setupAll({ create = true, perms = true, kickoff = "20:00" 
   return { roles, found, missing: create ? missing : [], perms, total: jobs.length };
 }
 
+/** Nur die Rechte aller verknüpften Kanäle neu setzen (ohne Kanäle anzulegen oder den Wochenplan zu ändern) */
+export async function setupPerms() {
+  const cfg = await getConfig();
+  const plan = await get("zeitplan") || {};
+  const jobs = [];
+  for (const p of PLAN) {
+    const ch = p.day ? plan[p.day]?.channelId : cfg.channels?.[p.key];
+    if (ch) jobs.push({ k: "perm", ch, prof: p.prof });
+  }
+  await mutate("setupjobs", (q) => { q.list = [...(q.list || []), ...jobs]; q.cats ||= {}; q.done = q.done || 0; q.total = (q.total || 0) + jobs.length; }, { initial: {} });
+  return jobs.length;
+}
+
 /** Aufträge abarbeiten (vom Befehl und danach jede Minute vom Timer) */
 export async function processSetupJobs(budgetMs = 8000) {
   const deadline = Date.now() + budgetMs;
@@ -166,7 +182,7 @@ export async function processSetupJobs(budgetMs = 8000) {
 async function setDay(day, ch, kickoff) {
   const k = parseTime(kickoff) || "20:00";
   const post = toMinutes(k) - 60 > toMinutes("12:00") ? "12:00" : "08:00";
-  await mutate("zeitplan", (p) => { const old = p[day]; p[day] = { channelId: ch, kickoff: k, post, name: "Champions League", lastPosted: old?.channelId === ch ? old.lastPosted ?? null : null }; }, { initial: {} });
+  await mutate("zeitplan", (p) => { const old = p[day]; if (old?.channelId === ch) return; /* schon eingestellt → Anpfiff, Uhrzeit und Name bleiben */ p[day] = { channelId: ch, kickoff: k, post, name: "Champions League", lastPosted: old?.channelId === ch ? old.lastPosted ?? null : null }; }, { initial: {} });
 }
 
 export async function setupProgress() {

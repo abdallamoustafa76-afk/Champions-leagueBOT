@@ -183,6 +183,14 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - Jeder Eintrag zeigt wer, was, in welchem Kanal und wann. Es wird niemand gepingt.
 - Der Admin-Kanal ist nur für Server-Admins sichtbar – die Turnierleitung sieht ihr eigenes Protokoll nicht.
 
+## Wer sieht welche Kanäle
+
+- **Ohne Rolle** sieht man nur 👋 Willkommen, 📜 Regelwerk und 🎭 Rollenauswahl.
+- Erst mit der Rolle **Spieler** oder **Manager** (über die Rollenauswahl) werden alle anderen Bot-Kanäle sichtbar. Staff (Turnierleitung, Moderator, Support) sieht immer alles.
+- `/cl-einrichten rechte` setzt genau diese Rechte für alle verknüpften Kanäle neu – ohne Kanäle anzulegen und ohne den Wochenplan anzufassen.
+- Eigene Kanäle, die der Bot nicht kennt (z. B. Community, Team-Chat), stellst du am einfachsten über ihre **Kategorie** ein: @everyone „Kanal ansehen“ ❌, Spieler und Manager ✅.
+- `/cl-einrichten alles` lässt bereits eingestellte Wochentage jetzt unverändert und setzt nur neue Tageskanäle auf den angegebenen Anpfiff.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
@@ -206,6 +214,7 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin verein-freigeben verein` | Verein freigeben |
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
+| `/cl-einrichten rechte` | Nur die Rechte aller verknüpften Kanäle neu setzen |
 | `/cl-admin willkommen-test` | Willkommensnachricht testweise für dich selbst posten |
 | `/cl-bewerbung öffnen · schließen` | Staff-Bewerbungen öffnen/schließen (nur Server-Admins) |
 | `/cl-admin ea-verknüpfen verein [ea_id]` | EA-Club neu suchen oder ID direkt eintragen |
