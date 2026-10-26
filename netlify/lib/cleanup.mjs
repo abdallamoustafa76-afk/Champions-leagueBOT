@@ -44,6 +44,22 @@ async function wipe(ch, since) {
   return ids.length;
 }
 
+/**
+ * Vor jeder Freigabe: alle Nachrichten im Kanal löschen, außer `keep` (z. B. der Spielplan).
+ * Nur Nachrichten der letzten 13 Tage – ältere kann Discord nicht in einem Rutsch löschen.
+ */
+export async function purgeExcept(ch, keep = []) {
+  if (!ch) return 0;
+  const keepSet = new Set(keep.filter(Boolean));
+  const ids = (await messagesSince(ch, Date.now() - 13 * 86400000, 300)).filter((id) => !keepSet.has(id));
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    if (chunk.length === 1) await deleteMessage(ch, chunk[0]);
+    else if (!(await discord(`/channels/${ch}/messages/bulk-delete`, "POST", { messages: chunk }))) for (const id of chunk) await deleteMessage(ch, id);
+  }
+  return ids.length;
+}
+
 /** Vom Timer: fällige Aufräum-Aufträge abarbeiten */
 export async function runCleanup(budgetMs = 8000, now = Date.now()) {
   const deadline = Date.now() + budgetMs;

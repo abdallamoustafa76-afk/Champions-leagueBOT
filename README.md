@@ -191,6 +191,13 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - Eigene Kanäle, die der Bot nicht kennt (z. B. Community, Team-Chat), stellst du am einfachsten über ihre **Kategorie** ein: @everyone „Kanal ansehen“ ❌, Spieler und Manager ✅.
 - `/cl-einrichten alles` lässt bereits eingestellte Wochentage jetzt unverändert und setzt nur neue Tageskanäle auf den angegebenen Anpfiff.
 
+## Saubere Kanäle bei jeder Freigabe
+
+- Vor jeder Freigabe (Spieltag 1, jeder weitere Spieltag, jede K.-o.-Runde) löscht der Bot **alle Nachrichten** im Gruppenkanal bzw. im KO-Kanal und postet dann die neue Freigabe.
+- Stehen bleiben nur der **Spielplan** der Gruppe bzw. der **Turnierbaum** (und das Ergebnis-Panel, falls es keinen eigenen Ergebniskanal gibt).
+- Die Ergebniskanäle (A–H-Ergebnisse, KO-Ergebnisse) werden nicht angefasst – Ergebnisse und Größenvideos bleiben bis zum Aufräumen nach dem Cup.
+- Der Bot braucht dafür in diesen Kanälen das Recht **Nachrichten verwalten**.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.

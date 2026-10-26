@@ -7,7 +7,7 @@ import * as V from "./views.mjs";
 import { DAYS, ROUND_ROLES, RULES_VERSION, flagOf } from "./data.mjs";
 import { viennaParts, viennaAt, shortDate, todayKey } from "./time.mjs";
 import { setNick, nickFor } from "./names.mjs";
-import { scheduleCleanup } from "./cleanup.mjs";
+import { scheduleCleanup, purgeExcept } from "./cleanup.mjs";
 
 // ---------- Hilfen ----------
 export function clubOfUser(clubs, uid) {
@@ -221,14 +221,29 @@ export async function doCheckinEnd(channelId) {
   return fresh;
 }
 
+/** Gruppenkanal leeren (Spielplan und ggf. Ergebnis-Panel bleiben) und Freigabe posten */
+async function postGroupFreigabe(t, g, round, cfg) {
+  const ch = cfg.channels["g" + g.name], role = cfg.roles.groups?.[g.name];
+  if (!ch) return;
+  const fresh = (await get(tKey(t.channelId))) || t;
+  const keep = [fresh.msgs?.groups?.[g.name]?.plan, fresh.msgs?.groups?.[g.name]?.res];
+  try { await purgeExcept(ch, keep); } catch (e) { console.error("Gruppenkanal leeren:", e?.message || e); }
+  await sendMessage(ch, V.freigabePost(t, g, round, role, cfg.channels["r" + g.name]));
+}
+
+/** KO-Kanal leeren (Turnierbaum und ggf. Ergebnis-Panel bleiben) und die neue Runde posten */
+async function postKoFreigabe(t, cfg) {
+  if (!cfg.channels.ko) return;
+  const fresh = (await get(tKey(t.channelId))) || t;
+  try { await purgeExcept(cfg.channels.ko, [fresh.msgs?.bracket, fresh.msgs?.koRes]); } catch (e) { console.error("KO-Kanal leeren:", e?.message || e); }
+  await sendMessage(cfg.channels.ko, V.koRoundPost(t, t.members, cfg.roles.rounds || {}, cfg.channels.kor));
+}
+
 export async function doKickoff(channelId) {
   const cfg = await getConfig();
   const { value: t, result: first } = await mutate(tKey(channelId), (t) => { if (t.kickoffDone) return false; t.kickoffDone = true; return true; });
   if (!first) return;
-  for (const g of t.groups) {
-    const ch = cfg.channels["g" + g.name], role = cfg.roles.groups?.[g.name];
-    if (ch) await sendMessage(ch, V.freigabePost(t, g, t.round, role, cfg.channels["r" + g.name]));
-  }
+  for (const g of t.groups) await postGroupFreigabe(t, g, t.round, cfg);
 }
 
 // ---------- Ergebniskanäle ----------
@@ -347,9 +362,8 @@ async function handleEvents(t, events) {
   for (const e of events || []) {
     if (e.type === "spieltag") {
       for (const g of t.groups) {
-        const ch = cfg.channels["g" + g.name], role = cfg.roles.groups?.[g.name];
         await refreshGroupPlan(t, g.name);
-        if (ch && t.matches.some((m) => m.group === g.name && m.round === e.round)) await sendMessage(ch, V.freigabePost(t, g, e.round, role, cfg.channels["r" + g.name]));
+        if (t.matches.some((m) => m.group === g.name && m.round === e.round)) await postGroupFreigabe(t, g, e.round, cfg);
       }
     }
     if (e.type === "ko-start") await startKOSideEffects(t, cfg);
@@ -367,7 +381,7 @@ async function startKOSideEffects(t, cfg) {
   await enqueue(ops);
   for (const g of t.groups) await refreshGroupPlan(t, g.name);
   await sendMessage(t.channelId, { content: `⭐ **Die Gruppenphase ist beendet!** ${t.koSize} Mannschaften stehen im ${T.koRoundName(t, 1)}.` });
-  if (cfg.channels.ko) await sendMessage(cfg.channels.ko, V.koRoundPost(t, t.members, cfg.roles.rounds || {}, cfg.channels.kor));
+  await postKoFreigabe(t, cfg);
   await refreshBracket(t);
   await refreshKOResultPanel(await get(tKey(t.channelId)), true);
 }
@@ -379,7 +393,7 @@ async function koRoundSideEffects(t, cfg, e) {
   for (const c of e.losers) if (!now.has(c)) for (const u of t.members[c] || []) ops.push({ u, rem: all, why: "Ausgeschieden" });
   for (const c of now) { const r = T.koRoleOf(t, c); for (const u of t.members[c] || []) ops.push({ u, add: [cfg.roles.rounds?.[r]], rem: all.filter((x) => x !== cfg.roles.rounds?.[r]), why: `K.-o.: ${r}` }); }
   await enqueue(ops);
-  if (cfg.channels.ko) await sendMessage(cfg.channels.ko, V.koRoundPost(t, t.members, cfg.roles.rounds || {}, cfg.channels.kor));
+  await postKoFreigabe(t, cfg);
   await refreshBracket(t);
   await refreshKOResultPanel(await get(tKey(t.channelId)), true);
 }

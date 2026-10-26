@@ -562,7 +562,7 @@ export function rolesPanel() {
         { name: "👔 Manager", value: "Du willst einen Verein übernehmen und an den Cups teilnehmen? Die Rolle bekommst du sofort – danach suchst du dir deinen Verein aus." },
         { name: "⚽ Spieler", value: "Du spielst in einer Mannschaft mit oder willst alles verfolgen? Die Rolle bekommst du sofort." },
       ],
-      footer: { text: "Wer Manager wird, verliert automatisch die Spieler-Rolle." },
+      footer: { text: "Wer Manager wird, verliert automatisch die Spieler-Rolle · Nochmal drücken entfernt die Rolle wieder." },
     }],
     components: [row(btn("Manager werden", "role_manager", 1, { emoji: { name: "👔" } }), btn("Spieler werden", "role_player", 3, { emoji: { name: "⚽" } }))],
   };

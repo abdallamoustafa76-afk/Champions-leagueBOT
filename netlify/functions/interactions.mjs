@@ -344,18 +344,48 @@ async function component(i, context) {
   // --- Rollenauswahl ---
   if (id === "role_player") {
     if (hasRole(i, cfg.roles.manager)) return eph("Du bist Manager – die Spieler-Rolle brauchst du nicht zusätzlich.");
-    if (hasRole(i, cfg.roles.spieler)) return eph("Du hast die Rolle **Spieler** bereits.");
+    if (hasRole(i, cfg.roles.spieler)) {
+      // Zweiter Klick: Rolle wieder entfernen
+      await enqueue([{ u: uid, rem: [cfg.roles.spieler], why: "Rollenauswahl: Spieler abgewählt" }]);
+      later(context, () => processQueue(3000));
+      return eph("➖ Die Rolle **Spieler** wurde entfernt.\n-# Ohne Rolle siehst du nur noch Willkommen, Regelwerk und Rollenauswahl. Ein Klick auf „Spieler werden“ gibt sie dir zurück.");
+    }
     await enqueue([{ u: uid, add: [cfg.roles.spieler], why: "Rollenauswahl: Spieler" }]);
     later(context, () => processQueue(3000));
     return eph("✅ Du hast jetzt die Rolle **Spieler**. Viel Spaß beim Champions League Cup!");
   }
   if (id === "role_manager") {
-    if (hasRole(i, cfg.roles.manager)) return eph("Du bist bereits **Manager**.");
+    if (hasRole(i, cfg.roles.manager)) {
+      // Zweiter Klick: erst nachfragen, weil dabei der Verein abgegeben wird
+      const mine = F.clubOfUser(await getClubs(), uid);
+      const what = !mine ? "" : mine.role === "co"
+        ? `\nDu bist dann nicht mehr Co-VM von ${flagOf(mine.club)} **${V.esc(mine.club)}**.`
+        : mine.data.co ? `\nDein Verein ${flagOf(mine.club)} **${V.esc(mine.club)}** geht an deinen Co-VM <@${mine.data.co}>.` : `\n⚠️ Dein Verein ${flagOf(mine.club)} **${V.esc(mine.club)}** wird **frei** und kann von jemand anderem übernommen werden.`;
+      return { type: 4, data: { flags: 64, allowed_mentions: { parse: [] }, content: `**Manager-Rolle wirklich abgeben?**${what}\nDu bekommst stattdessen die Rolle **Spieler**.`, components: [{ type: 1, components: [{ type: 2, style: 2, label: "Abbrechen", custom_id: "role_manager_keep" }, { type: 2, style: 4, label: "Ja, abgeben", custom_id: "role_manager_off" }] }] } };
+    }
     const b = await B.findBan([uid]);
     if (b) return eph(`❌ Du ${banText(b).replace(/^ist/, "bist")} und kannst gerade nicht Manager werden.`);
     await enqueue([{ u: uid, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: "Rollenauswahl: Manager" }]);
     later(context, () => processQueue(3000));
     return eph(`✅ Du bist jetzt **Manager**! Die Spieler-Rolle wurde entfernt.\nSuch dir jetzt deinen Verein aus${cfg.channels.reg ? ` in <#${cfg.channels.reg}>` : ""}.`);
+  }
+
+  if (id === "role_manager_keep") return reply(i, { content: "👍 Du bleibst Manager.", components: [] });
+  if (id === "role_manager_off") {
+    if (!hasRole(i, cfg.roles.manager)) return reply(i, { content: "Du bist kein Manager mehr.", components: [] });
+    return background(i, context, async () => {
+      const mine = F.clubOfUser(await getClubs(), uid);
+      if (mine?.role === "manager") await F.releaseClub(mine.club, { transferToCo: true, reason: "Manager-Rolle abgegeben" });
+      if (mine?.role === "co") {
+        const orig = mine.data.coOrigNick ?? null;
+        await mutate("clubs", (cl) => { if (cl[mine.club]?.co === uid) Object.assign(cl[mine.club], { co: null, coBase: null, coOrigNick: null }); }, { initial: {} });
+        await setNick(uid, orig);
+        await F.refreshOverview();
+      }
+      await enqueue([{ u: uid, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Rollenauswahl: Manager abgegeben" }]);
+      await processQueue(3000);
+      return `➖ Du bist kein Manager mehr${mine ? ` – ${mine.role === "co" ? "Co-VM-Platz" : "Verein"} abgegeben` : ""}. Du hast jetzt die Rolle **Spieler**.`;
+    }, { update: true });
   }
 
   // --- Regelwerk ---
