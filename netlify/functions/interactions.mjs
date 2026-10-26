@@ -11,6 +11,7 @@ import { baseNameOf, nickFor, setNick } from "../lib/names.mjs";
 import * as AS from "../lib/autosetup.mjs";
 import * as EAF from "../lib/eaflow.mjs";
 import * as SUP from "../lib/support.mjs";
+import * as AU from "../lib/audit.mjs";
 import { parseVienna, parseTime, toMinutes, nextOccurrence, dateKey, shortDate, todayKey, daysBetween, minutesToHHMM } from "../lib/time.mjs";
 
 // ---------- Hilfen ----------
@@ -59,6 +60,11 @@ export default async (req, context) => {
   if (!ok) return new Response("Ungültige Signatur", { status: 401 });
   const i = JSON.parse(body);
   if (i.type === 1) return json({ type: 1 });
+  // Protokoll für die Admins: Aktionen von Turnierleitung & Staff in den Admin-Kanal
+  try {
+    const text = auditEntry(i, await getConfig());
+    if (text) { const p = AU.audit(uidOf(i), text, i.channel_id).catch((e) => console.error("Protokoll:", e)); if (context?.waitUntil) context.waitUntil(p); }
+  } catch (e) { console.error("Protokoll:", e); }
   try {
     if (i.type === 2) return json(await command(i, context));
     if (i.type === 3) return json(await component(i, context));
@@ -70,6 +76,24 @@ export default async (req, context) => {
   }
 };
 export const config = { path: "/api/interactions" };
+
+// ---------- Protokoll ----------
+function auditEntry(i, cfg) {
+  if (i.type === 2) {
+    const name = i.data.name;
+    if (name === "cl-ergebnis") return null; // normale Spieler-Aktion
+    const ok = name === "cl-bewerbung" ? SUP.isServerAdmin(i.member) : isAdmin(i, cfg);
+    return ok ? `\`${AU.describeCommand(i.data)}\`` : null;
+  }
+  if (i.type !== 3 && i.type !== 5) return null;
+  const id = i.data.custom_id || "";
+  let ok = false;
+  if (id.startsWith("ban_")) ok = isStaff(i, cfg);
+  else if (id.startsWith("reset_ok:")) ok = isAdmin(i, cfg);
+  else if (id.startsWith("tk_")) ok = SUP.isTicketStaff(i.member, cfg);
+  else if (id.startsWith("ap_")) ok = SUP.isServerAdmin(i.member);
+  return ok ? AU.describeComponent(i) : null;
+}
 
 // ---------- Slash-Befehle ----------
 async function command(i, context) {

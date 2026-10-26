@@ -177,6 +177,12 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - `/cl-bewerbung öffnen` bzw. `/cl-bewerbung schließen` (nur Server-Admins) – das Panel zeigt dann „Bewerbungen geschlossen“.
 - Kanäle verknüpfen: `/cl-einrichten kanal typ: Support (Ticket-Panel)`, `… typ: Staff-Bewerbung`, `… typ: Admin (Bewerbungen & Ticket-Log)`, danach `/cl-einrichten rollen` (legt die Rolle **Support** an) und `/cl-einrichten panels`.
 
+## Protokoll für die Admins
+
+- Jede Aktion von Turnierleitung und Staff wird im Kanal ⚙️ Admin festgehalten: alle Befehle außer `/cl-ergebnis` (mit allen Angaben, z. B. `/cl-admin ergebnis spiel: 4 heim: 2 gast: 1`), Sperren und Aufheben, Zurücksetzen, Ticket übernehmen/hinzufügen/schließen sowie Entscheidungen über Bewerbungen.
+- Jeder Eintrag zeigt wer, was, in welchem Kanal und wann. Es wird niemand gepingt.
+- Der Admin-Kanal ist nur für Server-Admins sichtbar – die Turnierleitung sieht ihr eigenes Protokoll nicht.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
