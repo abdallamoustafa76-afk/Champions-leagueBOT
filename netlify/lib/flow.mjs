@@ -104,15 +104,27 @@ export async function activeTournament() {
 
 export async function launchTournament({ channelId, name, times, day, date }, { replace = false } = {}) {
   const old = await get(tKey(channelId));
+  // Schon eine Liste für genau diesen Cup-Tag offen? Dann nicht nochmal posten (verhindert doppelte Listen)
+  if (old && old.status === "anmeldung" && old.times?.kickoff === times.kickoff && old.msgs?.panel) {
+    await refreshSignup(old);
+    return old;
+  }
   if (old && !["fertig", "abgesagt", "geloescht"].includes(old.status)) {
     if (!replace) throw new Error("In diesem Kanal läuft bereits ein Turnier.");
     if (T.ACTIVE.includes(old.status)) throw new Error("In diesem Kanal läuft gerade noch ein Cup.");
     old.status = "geloescht";
     if (old.msgs.panel) await upsertMessage(channelId, old.msgs.panel, V.signupPanel(old, await getClubs()));
   }
+  // Sperre: zwei gleichzeitige Aufrufe für denselben Kanal posten nur einmal
+  const lockKey = `launch:${channelId}:${times.kickoff}`;
+  const { result: got } = await mutate("launchlocks", (l) => { const now = Date.now(); for (const [k, at] of Object.entries(l)) if (now - at > 10 * 60000) delete l[k]; if (l[lockKey]) return false; l[lockKey] = now; return true; }, { initial: {} });
+  if (!got) { const cur = await get(tKey(channelId)); if (cur) return cur; throw new Error("Die Liste wird gerade schon gepostet."); }
   const t = T.createTournament({ channelId, name, times, day, date });
   const msg = await sendMessage(channelId, V.signupPanel(t, await getClubs()));
-  if (!msg) throw new Error(`Ich konnte in <#${channelId}> nichts posten – fehlen dem Bot dort Rechte?`);
+  if (!msg) {
+    await mutate("launchlocks", (l) => { delete l[lockKey]; }, { initial: {} });
+    throw new Error(`Ich konnte in <#${channelId}> nichts posten – fehlen dem Bot dort Rechte?`);
+  }
   t.msgs.panel = msg.id;
   await set(tKey(channelId), t);
   return t;

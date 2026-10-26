@@ -4,7 +4,8 @@ import { listMembers, sendMessage } from "./discord.mjs";
 import { notify } from "./notify.mjs";
 import { welcomePost } from "./views.mjs";
 import { enqueue } from "./roles.mjs";
-import { releaseClub, refreshOverview } from "./flow.mjs";
+import { releaseClub, refreshOverview, activeTournament } from "./flow.mjs";
+import * as T from "./tournament.mjs";
 import { viennaParts, todayKey, daysBetween } from "./time.mjs";
 import { INACTIVE_DAYS, COLOR, flagOf } from "./data.mjs";
 
@@ -81,4 +82,36 @@ export async function welcomeNewMembers(members) {
     return list.map((m) => m.user.id);
   }, { initial: {} });
   for (const id of todo) await sendMessage(cfg.channels.welcome, welcomePost(id, cfg.channels));
+}
+
+/**
+ * Sicherheitsnetz für Turnier-Rollen: vergleicht jede Minute, welche Gruppen- bzw. K.-o.-Rolle jeder Teilnehmer
+ * haben sollte, mit dem, was er wirklich hat – und korrigiert Abweichungen (z. B. wenn Discord eine Vergabe abgelehnt hat).
+ */
+export async function reconcileCupRoles(members) {
+  if (!members) return;
+  const t = await activeTournament();
+  if (!t || !T.ACTIVE.includes(t.status)) return;
+  const cfg = await getConfig();
+  const groupRoles = cfg.roles.groups || {}, roundRoles = cfg.roles.rounds || {};
+  const managed = new Set([...Object.values(groupRoles), ...Object.values(roundRoles)].filter(Boolean));
+  const pending = new Set(((await get("rolequeue")) || []).map((o) => o.u)); // nicht dazwischenfunken
+  const want = new Map();
+  for (const u of Object.values(t.members || {}).flat()) want.set(u, new Set());
+  const wish = (club, role) => { if (role) for (const u of t.members?.[club] || []) want.get(u)?.add(role); };
+  if (t.status === "checkin" || t.status === "gruppen") {
+    for (const g of t.groups) for (const c of g.teams) if (!t.out.includes(c)) wish(c, groupRoles[g.name]);
+  } else {
+    for (const m of T.currentMatches(t)) for (const c of [m.home, m.away]) wish(c, roundRoles[T.koRoleOf(t, c)]);
+  }
+  const byId = new Map(members.map((m) => [m.user.id, m]));
+  const ops = [];
+  for (const [u, roles] of want) {
+    const m = byId.get(u);
+    if (!m || pending.has(u)) continue;
+    const add = [...roles].filter((r) => !m.roles.includes(r));
+    const rem = m.roles.filter((r) => managed.has(r) && !roles.has(r));
+    if (add.length || rem.length) ops.push({ u, add, rem, why: "Turnier-Rollen abgeglichen" });
+  }
+  await enqueue(ops);
 }

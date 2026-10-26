@@ -1,6 +1,6 @@
 // Läuft jede Minute: Wochenplan, Turnier-Zeitpunkte, Rollen-Abgleich, Inaktivität, Rollen-Warteschlange.
 import { runSchedule, runTimers, allTournaments, runAutoConfirm } from "../lib/flow.mjs";
-import { syncManagerRoles, dailyInactivity, welcomeNewMembers } from "../lib/maintenance.mjs";
+import { syncManagerRoles, dailyInactivity, welcomeNewMembers, reconcileCupRoles } from "../lib/maintenance.mjs";
 import { listMembers } from "../lib/discord.mjs";
 import { processQueue } from "../lib/roles.mjs";
 import { expireBans } from "../lib/bans.mjs";
@@ -22,6 +22,7 @@ export default async () => {
   });
   await step("Ergebnisse automatisch bestätigen", () => runAutoConfirm());
   await step("Rollen-Abgleich", () => syncManagerRoles(members));
+  await step("Turnier-Rollen prüfen", () => reconcileCupRoles(members));
   await step("Inaktivität", () => dailyInactivity());
   await step("Sperren", () => expireBans());
   await step("Benachrichtigungen löschen", () => runAutoDelete());
