@@ -72,6 +72,12 @@ const COMMANDS = [
       { type: 1, name: "freilos-hinzufügen", description: "Ein Freilos in die Anmeldeliste dieses Kanals setzen" },
       { type: 1, name: "freilos-entfernen", description: "Ein Freilos aus der Anmeldeliste dieses Kanals entfernen" },
       { type: 1, name: "abbrechen", description: "Laufendes Turnier abbrechen und Rollen entfernen" },
+      { type: 1, name: "ea-verknüpfen", description: "EA-Club eines Vereins neu suchen oder die EA-Club-ID direkt eintragen", options: [
+        { type: 3, name: "verein", description: "Vereinsname genau wie in der Übersicht", required: true },
+        { type: 3, name: "ea_id", description: "EA-Club-ID (leer lassen = per Name suchen)", required: false, max_length: 12 },
+      ] },
+      { type: 1, name: "ea-status", description: "TOTT: Zeigen, welche Mannschaften mit EA verknüpft sind und wie viele Daten gesammelt wurden" },
+      { type: 1, name: "tott", description: "TOTT des letzten Turniers sofort (neu) posten" },
       { type: 1, name: "verein-freigeben", description: "Einen Verein freigeben (z. B. bei Streit)", options: [
         { type: 3, name: "verein", description: "Vereinsname genau wie in der Übersicht", required: true },
       ] },

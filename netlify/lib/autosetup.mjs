@@ -22,6 +22,7 @@ const PLAN = [
   ...DAYS.map((d, i) => ({ key: "day" + (i + 1), name: "🗓️・" + fancy(d), cat: "cl", prof: "public", day: i + 1 })),
   { key: "live", name: "📺・" + fancy("Live-Spielplan"), cat: "cl", prof: "public" },
   { key: "hof", name: "🏆・" + fancy("Hall-of-Fame"), cat: "cl", prof: "public" },
+  { key: "tott", name: "⭐・" + fancy("TOTT"), cat: "cl", prof: "public" },
   { key: "trophy", name: "🏅・" + fancy("Trophaeenhalle"), cat: "cl", prof: "public" },
   { key: "ban", name: "🚫・" + fancy("Sperrliste"), cat: "cl", prof: "public" },
   { key: "log", name: "📢・" + fancy("Turnierleitung"), cat: "cl", prof: "staff" },
@@ -44,7 +45,7 @@ export function detectKey(rawName) {
   if (n.includes("kophase")) return "ko";
   const day = DAYS.findIndex((d) => n === d.toLowerCase());
   if (day >= 0) return "day" + (day + 1);
-  const map = [["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
+  const map = [["teamofthetournament", "tott"], ["tott", "tott"], ["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
   for (const [kw, key] of map) if (n.includes(kw)) return key;
   if (n === "regeln") return "rules";
   return null;

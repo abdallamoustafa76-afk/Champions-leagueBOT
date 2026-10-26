@@ -1,4 +1,4 @@
-# ⭐ Champions League Bot 2.0
+# ⭐ Champions League Bot 2.1
 
 Discord-Bot für tägliche Champions-League-Cups: 128 Vereine zum Übernehmen, automatische Anmeldelisten pro Wochentag, Formate von 8 bis 32 Mannschaften, Check-in in Gruppenkanälen, Live-Spielplan, K.-o.-Phase mit Runden-Rollen und Siegerbild in der Hall of Fame. Läuft komplett auf Netlify, Einrichtung nur im Browser.
 
@@ -148,6 +148,18 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - In den Ergebniskanälen brauchen die Gruppen-Rollen deshalb **Nachrichten senden** und **Dateien anhängen**.
 - Ist für eine Gruppe kein Ergebniskanal verknüpft, laufen Ergebnisse über den Gruppenkanal.
 
+## TOTT – Team of the Tournament (EA FC Pro Clubs)
+
+- Jede Mannschaft trägt bei der Registrierung ihren **EA-FC-Clubnamen** ein. Der Bot sucht dazu im Hintergrund die EA-Club-ID (Status unter *Meine Mannschaft → EA-Club*).
+- Ab Anpfiff sucht der Bot **jede Minute** zu jedem beendeten Cup-Spiel das passende Pro-Clubs-Spiel (Freundschaftsspiel) der beiden EA-Clubs und sammelt die Werte aller Spieler: Note, Tore, Vorlagen, Man of the Match, Zu-null-Spiele, Position.
+- Nach dem Finale (spätestens 20 Minuten danach, damit auch die EA-Daten vom Finale da sind) postet der Bot im Kanal **⭐ TOTT** das Bild mit der besten Elf im **4-3-3** und dem **Spieler des Turniers**.
+- Auswahl: pro Position die beste **Durchschnittsnote**. Bei Gleichstand entscheiden Torbeteiligungen, dann die Zahl der Einsätze. Wer mindestens die Hälfte der Spiele bestritten hat, kommt zuerst dran. Fehlen auf einer Position Spieler, wird von der Nachbarposition aufgefüllt.
+- Die Ergebnisse melden die Mannschaften weiterhin selbst – EA-Daten werden **nur fürs TOTT** genutzt. Ist EA nicht erreichbar oder ein Club nicht verknüpft, fehlen nur dessen Spieler im TOTT.
+- `/cl-admin ea-status` zeigt, welche Mannschaften verknüpft sind und wie viele Spiele/Spieler schon gesammelt wurden. `/cl-admin ea-verknüpfen verein [ea_id]` sucht neu oder trägt die EA-Club-ID direkt ein. `/cl-admin tott` postet das TOTT des letzten Turniers sofort (neu).
+- Den Kanal legt `/cl-einrichten alles` automatisch an (oder `/cl-einrichten kanal typ: TOTT`).
+- Optionale Umgebungsvariablen: `EA_AUTO=0` schaltet das TOTT aus, `EA_PLATFORM` = `common-gen5` (Standard: PS5/Xbox Series/PC) oder `common-gen4` (PS4/Xbox One).
+- Nach dem Update einmal `https://DEINE-SEITE.netlify.app/api/setup?key=DEIN_SETUP_KEY` aufrufen, damit die neuen Befehle erscheinen.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
@@ -169,6 +181,9 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin ergebnis spiel heim gast [elfmeter]` | Ergebnis festlegen (z. B. bei Konflikt) |
 | `/cl-admin abbrechen` | Turnier abbrechen, Rollen entfernen |
 | `/cl-admin verein-freigeben verein` | Verein freigeben |
+| `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
+| `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
+| `/cl-admin ea-verknüpfen verein [ea_id]` | EA-Club neu suchen oder ID direkt eintragen |
 
 Spieler melden Ergebnisse über den Button im Spielplan oder mit `/cl-ergebnis`.
 

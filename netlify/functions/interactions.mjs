@@ -9,6 +9,7 @@ import { CLUBS, LEAGUES, GROUP_NAMES, ROUND_ROLES, CHANNEL_TYPES, BASE_CHANNEL_T
 import * as B from "../lib/bans.mjs";
 import { baseNameOf, nickFor, setNick } from "../lib/names.mjs";
 import * as AS from "../lib/autosetup.mjs";
+import * as EAF from "../lib/eaflow.mjs";
 import { parseVienna, parseTime, toMinutes, nextOccurrence, dateKey, shortDate, todayKey, daysBetween, minutesToHHMM } from "../lib/time.mjs";
 
 // ---------- Hilfen ----------
@@ -225,6 +226,32 @@ async function admin(i, context, cfg) {
     return eph(`🎟️ ${add ? "Freilos hinzugefügt" : "Freilos entfernt"} – jetzt ${count} ${count === 1 ? "Freilos" : "Freilose"} in der Liste.`);
   }
   if (sub.name === "abbrechen") return background(i, context, async () => { const t = await resolveTournament(i); await F.cancelTournament(t.channelId); return "✅ Turnier abgebrochen, Rollen werden entfernt."; });
+  if (sub.name === "ea-verknüpfen") {
+    return background(i, context, async () => {
+      const name = CLUBS.find((c) => c.name.toLowerCase() === String(o.verein).trim().toLowerCase())?.name;
+      if (!name) throw new Error("Diesen Verein gibt es nicht. Bitte genau wie in der Übersicht schreiben.");
+      const id = o.ea_id ? String(o.ea_id).trim() : null;
+      if (id && !/^\d{1,12}$/.test(id)) throw new Error("Die EA-Club-ID besteht nur aus Ziffern.");
+      const r = await EAF.linkEaClub(name, { force: true, id });
+      if (r.found) return `✅ ${flagOf(name)} **${V.esc(name)}** ist mit EA verknüpft${r.found.name ? ` → **${V.esc(r.found.name)}**` : ""} (ID ${r.found.id}).`;
+      return r.err ? `⚠️ EA ist gerade nicht erreichbar (${r.err}). Später nochmal probieren oder die ID direkt angeben.` : `⚠️ Für ${flagOf(name)} **${V.esc(name)}** wurde bei EA kein eindeutiger Club gefunden. Namen prüfen oder die EA-Club-ID mit \`ea_id\` direkt eintragen.`;
+    });
+  }
+  if (sub.name === "ea-status") {
+    return background(i, context, async () => {
+      const t = (await F.activeTournament()) || (await EAF.latestTournament(i.channel_id));
+      if (!t) throw new Error("Es gibt noch kein Turnier.");
+      return `🎮 **EA-Daten fürs TOTT · ${t.name}**${EAF.eaEnabled() ? "" : "\n⛔ Das TOTT ist ausgeschaltet (EA_AUTO=0)."}\n${await EAF.eaStatus(t)}`.slice(0, 1990);
+    });
+  }
+  if (sub.name === "tott") {
+    return background(i, context, async () => {
+      const t = await EAF.latestTournament(i.channel_id);
+      if (!t) throw new Error("Es gibt noch kein Turnier mit Anpfiff.");
+      const r = await EAF.postTott(t, { force: true });
+      return r.posted ? `✅ TOTT für **${t.name}** in <#${r.channel}> gepostet.` : `⚠️ TOTT nicht gepostet: ${r.reason}.`;
+    });
+  }
   if (sub.name === "verein-freigeben") {
     return background(i, context, async () => {
       const name = CLUBS.find((c) => c.name.toLowerCase() === String(o.verein).trim().toLowerCase())?.name;
@@ -458,6 +485,7 @@ async function modal(i, context) {
     later(context, async () => {
       await setNick(uid, nickFor(baseNameOf(i.member), "manager", c.name));
       await F.refreshRegPanel(); await F.refreshOverview();
+      if (EAF.eaEnabled()) await EAF.linkEaClub(c.name, { force: true });
     });
     return reply(i, { content: `${c.flag} **Willkommen, Manager von ${V.esc(c.name)}!**\nDeine Mannschaft findest du in ${cfg.channels.team ? `<#${cfg.channels.team}>` : "Meine-Mannschaft"}.`, embeds: [], components: [] });
   }
@@ -484,8 +512,9 @@ async function modal(i, context) {
     if (ea.length < 3) return reply(i, { content: "Der EA-Clubname braucht mindestens 3 Zeichen." });
     const clubs = await getClubs(), mine = F.clubOfUser(clubs, uid);
     if (!mine) return reply(i, { content: "Du bist keiner Mannschaft zugeordnet.", embeds: [], components: [] });
-    const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]) cl[mine.club].ea = ea; }, { initial: {} });
-    return reply(i, { ...V.teamDetail(mine.club, value[mine.club], mine.role, daysBetween(value[mine.club].lastPlayed || todayKey(), todayKey())), content: "✅ EA-Club gespeichert." });
+    const { value } = await mutate("clubs", (cl) => { const x = cl[mine.club]; if (x && x.ea !== ea) Object.assign(x, { ea, eaId: null, eaName: null, eaLookup: null }); }, { initial: {} });
+    if (EAF.eaEnabled()) later(context, () => EAF.linkEaClub(mine.club, { force: true }));
+    return reply(i, { ...V.teamDetail(mine.club, value[mine.club], mine.role, daysBetween(value[mine.club].lastPlayed || todayKey(), todayKey())), content: "✅ EA-Club gespeichert. Die Verknüpfung mit EA läuft im Hintergrund – öffne das Fenster gleich nochmal, um den Status zu sehen." });
   }
 
   if (id.startsWith("res:")) {

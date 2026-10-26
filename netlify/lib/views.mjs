@@ -91,7 +91,7 @@ export function teamDetail(c, data, role, todayDays) {
       fields: [
         { name: "Manager", value: `<@${data.manager}>`, inline: true },
         { name: "Co-VM", value: data.co ? `<@${data.co}>` : "–", inline: true },
-        { name: "EA-Club", value: esc(data.ea || "–"), inline: true },
+        { name: "EA-Club", value: `${esc(data.ea || "–")}\n${data.eaId ? "-# ✅ mit EA verknüpft" : data.eaLookup?.ok === false && !data.eaLookup?.err ? "-# ⚠️ bei EA nicht gefunden – Namen prüfen" : "-# ⏳ noch nicht verknüpft"}`, inline: true },
         { name: "Aktivität", value: `${todayDays === 0 ? "**Aktiv** · heute gespielt" : `${todayDays >= 5 ? "**Achtung**" : "**Aktiv**"} · zuletzt gespielt vor ${todayDays} ${todayDays === 1 ? "Tag" : "Tagen"}`}\n${bar}\nNoch ${left} ${left === 1 ? "Tag" : "Tage"} bis zum Reset`, inline: false },
         { name: "Cups", value: String(data.cups ?? 0), inline: true },
         { name: "Titel", value: String(data.titles ?? 0), inline: true },

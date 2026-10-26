@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { club } from "./data.mjs";
 
-function assetDir() {
+export function assetDir() {
   const tries = [
     path.resolve(process.cwd(), "netlify/assets"),
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../assets"),
@@ -14,7 +14,7 @@ function assetDir() {
   return tries.find((p) => fs.existsSync(path.join(p, "fonts"))) || tries[0];
 }
 let fontsReady = false;
-function fonts() {
+export function fonts() {
   if (fontsReady) return;
   const dir = assetDir();
   GlobalFonts.registerFromPath(path.join(dir, "fonts/BebasNeue-Regular.ttf"), "Bebas Neue");

@@ -1,11 +1,12 @@
 {
   "name": "champions-league-bot",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "dependencies": {
     "@napi-rs/canvas": "^1.0.13",
     "@netlify/blobs": "^11.1.6",
+    "impit": "^0.14.5",
     "tweetnacl": "^1.0.3"
   }
 }
