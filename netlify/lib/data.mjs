@@ -20,7 +20,12 @@ export const CLUBS = LEAGUES.flatMap((l, li) => l.clubs.map((name) => ({ name, l
 const BY_NAME = Object.fromEntries(CLUBS.map((c, i) => [c.name, { ...c, idx: i }]));
 export const club = (name) => BY_NAME[name];
 export const clubIndex = (name) => BY_NAME[name]?.idx;
-export const flagOf = (name) => BY_NAME[name]?.flag ?? "⚽";
+export const isFreilos = (name) => String(name).startsWith("Freilos");
+export const flagOf = (name) => (isFreilos(name) ? "🎟️" : BY_NAME[name]?.flag ?? "⚽");
+/** Kurzname für Spitznamen: "FC Barcelona" → "Barcelona" */
+export function shortClub(name) {
+  return String(name).replace(/^(1\. FC|FC|AC|AS|SC|RC|RCD|OGC|OSC|SSC|CFC|US|UD|AJ|HSC|TSG|VfB|VfL|AFC)\s+/, "");
+}
 
 /** Formate: Gruppengrößen, wie viele pro Gruppe sicher weiter (top) und wie viele „Beste des nächsten Platzes“ (ex). */
 export const FORMATS = {

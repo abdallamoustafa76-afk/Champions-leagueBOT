@@ -1,5 +1,5 @@
 // Alle Discord-Ansichten (Embeds, Buttons, Formulare). Alle Ränder in Blau.
-import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS, BAN_DEFAULT_DAYS, VIDEO_LIMIT, VIDEO_WINDOW_MIN, RULES, flagOf, club as clubInfo, clubIndex } from "./data.mjs";
+import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS, BAN_DEFAULT_DAYS, VIDEO_LIMIT, VIDEO_WINDOW_MIN, RULES, isFreilos, flagOf, club as clubInfo, clubIndex } from "./data.mjs";
 import { fmtOf, nextFmt, standings, currentMatches, winner, koRoundName } from "./tournament.mjs";
 
 const FOOTER = { text: "Champions League Bot" };
@@ -156,21 +156,28 @@ const STATUS = {
   geloescht: "🗑️ **Turnier abgebrochen**",
 };
 
-export function signupPanel(t) {
+export function signupPanel(t, clubs = {}) {
   const n = t.reg.length, f = fmtOf(n);
   const closed = t.status !== "anmeldung";
-  const playing = closed ? (t.playing.length ? t.playing : t.reg) : f ? t.reg.slice(0, f) : t.reg;
-  const wait = closed ? t.wait : f ? t.reg.slice(f) : [];
+  const real = t.reg.filter((c) => !isFreilos(c)), free = t.reg.filter(isFreilos);
+  const ordered = [...real.slice(0, f || n), ...free, ...real.slice(f || n)];
+  const playing = closed ? (t.playing.length ? t.playing : t.reg) : f ? ordered.slice(0, f) : ordered;
+  const wait = closed ? t.wait : f ? ordered.slice(f).filter((c) => !isFreilos(c)) : [];
   const num = (k) => `\`${String(k + 1).padStart(2, "0")}\``;
-  const tl = (c, k, waitList) => `${num(k)} ${flagOf(c)} ${esc(c)}${t.status === "checkin" && waitList ? (t.waitChecked.includes(c) ? " ✅" : " ⏳") : ""}`;
-  const half = Math.ceil(playing.length / 2);
-  const fields = playing.length
+  const who = (c) => (clubs[c]?.manager ? ` | <@${clubs[c].manager}>` : "");
+  const tl = (c, k, waitList) => isFreilos(c)
+    ? `${num(k)} 🎟️ **Freilos**`
+    : `${num(k)} ${flagOf(c)} **${esc(c)}**${who(c)}${t.status === "checkin" && waitList ? (t.waitChecked.includes(c) ? " ✅" : " ⏳") : ""}`;
+  const lines = playing.map((c, k) => tl(c, k));
+  const freeCount = playing.filter(isFreilos).length;
+  const fields = lines.length
     ? [
-        { name: `👥 Mannschaften (${playing.length}${f && !closed ? "/" + f : ""})`, value: playing.slice(0, half).map((c, k) => tl(c, k)).join("\n"), inline: true },
-        ...(playing.length > half ? [{ name: "\u200b", value: playing.slice(half).map((c, k) => tl(c, k + half)).join("\n"), inline: true }] : []),
+        { name: `👥 Mannschaften (${playing.length}${f && !closed ? "/" + f : ""})${freeCount ? ` · davon ${freeCount} Freilos` : ""}`, value: lines.slice(0, 16).join("\n") },
+        ...(lines.length > 16 ? [{ name: "\u200b", value: lines.slice(16).join("\n") }] : []),
       ]
     : [{ name: "👥 Mannschaften", value: "_Noch keine Anmeldungen_" }];
-  if (wait.length) fields.push({ name: "⏳ Warteliste", value: wait.map((c, k) => tl(c, k, true)).join("\n") + "\n-# Rückt nach, wenn eine Mannschaft nicht eincheckt.", inline: false });
+  if (wait.length) fields.push({ name: "⏳ Warteliste", value: wait.map((c, k) => tl(c, k, true)).join("\n") + "\n-# Rückt nach, wenn eine Mannschaft nicht eincheckt." });
+  if (freeCount) fields.push({ name: "\u200b", value: "-# 🎟️ Wer gegen ein Freilos spielt, gewinnt automatisch 3:0. Freilose kommen nie weiter." });
   const times = t.times;
   const description =
     `${hhmm(times.close)} Anmeldeschluss · ${hhmm(times.close)} Auslosung · ${hhmm(times.checkinEnd)} Check-in-Ende · ${hhmm(times.kickoff)} Anpfiff\n\n` +
@@ -178,7 +185,13 @@ export function signupPanel(t) {
   const components = [];
   if (t.status === "anmeldung") components.push(row(btn("Anmelden", "cup_join", 1, { emoji: { name: "⭐" } }), btn("Abmelden", "cup_leave")));
   if (t.status === "checkin" && t.wait.length) components.push(row(btn("Warteliste: Einchecken", "cup_waitci", 3, { emoji: { name: "✅" } })));
-  return { embeds: [{ color: COLOR, title: `⭐ ${t.name.toUpperCase()}`, description: description.slice(0, 4096), fields, footer: FOOTER }], components };
+  return {
+    embeds: [
+      { color: COLOR, image: { url: `${site()}/banner-anmeldung.jpg` } },
+      { color: COLOR, title: t.name.toUpperCase(), description: description.slice(0, 4096), fields, footer: FOOTER },
+    ],
+    components,
+  };
 }
 
 export function drawPost(t) {

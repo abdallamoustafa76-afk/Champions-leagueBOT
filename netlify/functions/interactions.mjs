@@ -7,6 +7,7 @@ import * as V from "../lib/views.mjs";
 import * as F from "../lib/flow.mjs";
 import { CLUBS, LEAGUES, GROUP_NAMES, ROUND_ROLES, CHANNEL_TYPES, BASE_CHANNEL_TYPES, DAYS, COLOR, VIDEO_LIMIT, VIDEO_WINDOW_MIN, flagOf } from "../lib/data.mjs";
 import * as B from "../lib/bans.mjs";
+import { baseNameOf, nickFor, setNick } from "../lib/names.mjs";
 import { parseVienna, parseTime, toMinutes, nextOccurrence, dateKey, shortDate, todayKey, daysBetween, minutesToHHMM } from "../lib/time.mjs";
 
 // ---------- Hilfen ----------
@@ -82,6 +83,7 @@ async function command(i, context) {
 
 async function setup(i, context, cfg) {
   const sub = i.data.options[0], o = opts(sub.options);
+  o.kanal = o.kanal || i.channel_id; // ohne Auswahl: aktueller Kanal
   if (sub.name === "kanal") {
     await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[o.typ] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
     return eph(`✅ **${CHANNEL_TYPES[o.typ]}** → <#${o.kanal}>`);
@@ -118,6 +120,7 @@ async function setup(i, context, cfg) {
 
 async function schedule(i, context) {
   const sub = i.data.options[0], o = opts(sub.options);
+  o.kanal = o.kanal || i.channel_id; // ohne Auswahl: aktueller Kanal
   if (sub.name === "setzen") {
     const kickoff = parseTime(o.anpfiff), post = parseTime(o.posten ?? "12:00");
     if (!kickoff) return eph("Anpfiff bitte so angeben: `20:00`");
@@ -180,6 +183,12 @@ async function admin(i, context, cfg) {
       await F.afterResult(t, m, result.events, true);
       return `✅ Spiel #${m.id} festgelegt: ${V.matchLine(m, false)}`;
     });
+  }
+  if (sub.name === "freilos-hinzufügen" || sub.name === "freilos-entfernen") {
+    const add = sub.name === "freilos-hinzufügen";
+    const { value: t, result: count } = await mutate(tKey(i.channel_id), (t) => (add ? T.addFreilos(t) : T.removeFreilos(t)), { missing: "In diesem Kanal gibt es gerade keine Anmeldung – bitte im Tageskanal benutzen." });
+    later(context, () => F.refreshSignup(t));
+    return eph(`🎟️ ${add ? "Freilos hinzugefügt" : "Freilos entfernt"} – jetzt ${count} ${count === 1 ? "Freilos" : "Freilose"} in der Liste.`);
   }
   if (sub.name === "abbrechen") return background(i, context, async () => { const t = await resolveTournament(i); await F.cancelTournament(t.channelId); return "✅ Turnier abgebrochen, Rollen werden entfernt."; });
   if (sub.name === "verein-freigeben") {
@@ -257,9 +266,10 @@ async function component(i, context) {
     if (id === "team_ea") return V.eaModal("team_ea_m", "EA-Club ändern", mine.data.ea);
     if (mine.role === "co") {
       if (id === "team_co_quit") {
-        await mutate("clubs", (cl) => { if (cl[mine.club]?.co === uid) cl[mine.club].co = null; }, { initial: {} });
+        const orig = mine.data.coOrigNick ?? null;
+        await mutate("clubs", (cl) => { if (cl[mine.club]?.co === uid) Object.assign(cl[mine.club], { co: null, coBase: null, coOrigNick: null }); }, { initial: {} });
         await enqueue([{ u: uid, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Als Co-VM ausgetreten" }]);
-        later(context, F.refreshOverview);
+        later(context, async () => { await setNick(uid, orig); await F.refreshOverview(); });
         return reply(i, { content: `Du bist als Co-VM von ${flagOf(mine.club)} **${V.esc(mine.club)}** ausgetreten.`, embeds: [], components: [] });
       }
       return reply(i, { content: "Das kann nur der Manager der Mannschaft.", embeds: [], components: [] });
@@ -273,16 +283,19 @@ async function component(i, context) {
       if (F.clubOfUser(clubs, target)) return reply(i, { ...V.coSelect(), content: "Dieses Mitglied gehört schon zu einer Mannschaft." });
       const tb = await B.findBan([target]);
       if (tb) return reply(i, { ...V.coSelect(), content: `<@${target}> ${banText(tb)} und kann gerade kein Co-VM werden.` });
-      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]?.manager === uid) cl[mine.club].co = target; }, { initial: {} });
+      const tm = i.data.resolved?.members?.[target];
+      const coBase = baseNameOf(tm, user);
+      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]?.manager === uid) Object.assign(cl[mine.club], { co: target, coBase, coOrigNick: tm?.nick ?? null }); }, { initial: {} });
       await enqueue([{ u: target, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: `Co-VM von ${mine.club}` }]);
-      later(context, F.refreshOverview);
+      later(context, async () => { await setNick(target, nickFor(coBase, "co", mine.club)); await F.refreshOverview(); });
       return reply(i, detail({ ...mine, data: value[mine.club] }, `✅ <@${target}> ist jetzt Co-VM – Rolle Manager vergeben, Rolle Spieler entfernt.`));
     }
     if (id === "team_co_rem") {
       const co = mine.data.co; if (!co) return reply(i, detail(mine));
-      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]) cl[mine.club].co = null; }, { initial: {} });
+      const orig = mine.data.coOrigNick ?? null;
+      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]) Object.assign(cl[mine.club], { co: null, coBase: null, coOrigNick: null }); }, { initial: {} });
       await enqueue([{ u: co, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: `Co-VM von ${mine.club} entfernt` }]);
-      later(context, F.refreshOverview);
+      later(context, async () => { await setNick(co, orig); await F.refreshOverview(); });
       return reply(i, detail({ ...mine, data: value[mine.club] }, "✅ Co-VM entfernt – Rolle Manager entfernt, Rolle Spieler wieder vergeben."));
     }
     const busy = async () => { for (const t of await F.allTournaments()) if (!["fertig", "abgesagt", "geloescht"].includes(t.status) && (t.reg.includes(mine.club) || t.playing.includes(mine.club))) return true; return false; };
@@ -388,13 +401,13 @@ async function modal(i, context) {
     const { result } = await mutate("clubs", (cl) => {
       if (F.clubOfUser(cl, uid)) return "schon";
       if (cl[c.name]) return "vergeben";
-      cl[c.name] = { manager: uid, co: null, ea, since: Date.now(), lastPlayed: todayKey(), cups: 0, titles: 0 };
+      cl[c.name] = { manager: uid, co: null, ea, since: Date.now(), lastPlayed: todayKey(), cups: 0, titles: 0, managerBase: baseNameOf(i.member), managerOrigNick: i.member?.nick ?? null };
       return "ok";
     }, { initial: {} });
     if (result === "vergeben") return reply(i, { content: `${c.name} wurde gerade vergeben – wähl eine andere Mannschaft.`, ...V.regClubs(await getClubs(), c.li) });
     if (result === "schon") return reply(i, { content: "Du hast bereits eine Mannschaft.", components: [] });
     later(context, async () => {
-      if (cfg.channels.reg) await (await import("../lib/discord.mjs")).sendMessage(cfg.channels.reg, V.newManagerPost(c.name, uid));
+      await setNick(uid, nickFor(baseNameOf(i.member), "manager", c.name));
       await F.refreshRegPanel(); await F.refreshOverview();
     });
     return reply(i, { content: `${c.flag} **Willkommen, Manager von ${V.esc(c.name)}!**\nDeine Mannschaft findest du in ${cfg.channels.team ? `<#${cfg.channels.team}>` : "Meine-Mannschaft"}.`, embeds: [], components: [] });

@@ -6,6 +6,7 @@ import * as T from "./tournament.mjs";
 import * as V from "./views.mjs";
 import { DAYS, ROUND_ROLES, RULES_VERSION, flagOf } from "./data.mjs";
 import { viennaParts, viennaAt, shortDate, todayKey } from "./time.mjs";
+import { setNick, nickFor } from "./names.mjs";
 
 // ---------- Hilfen ----------
 export function clubOfUser(clubs, uid) {
@@ -70,11 +71,24 @@ export async function releaseClub(name, { transferToCo = false, reason = "" } = 
   const cfg = await getConfig();
   const { result } = await mutateClubsSafe((clubs) => {
     const c = clubs[name]; if (!c) return null;
-    if (transferToCo && c.co) { const old = c.manager; c.manager = c.co; c.co = null; return { transferred: true, old, now: c.manager }; }
+    if (transferToCo && c.co) {
+      const old = { id: c.manager, orig: c.managerOrigNick ?? null };
+      c.manager = c.co; c.managerBase = c.coBase; c.managerOrigNick = c.coOrigNick ?? null;
+      c.co = null; c.coBase = null; c.coOrigNick = null;
+      return { transferred: true, old, now: c.manager, base: c.managerBase };
+    }
     delete clubs[name];
-    return { transferred: false, co: c.co, manager: c.manager };
+    return { transferred: false, co: c.co, manager: c.manager, managerOrig: c.managerOrigNick ?? null, coOrig: c.coOrigNick ?? null };
   });
   if (!result) return null;
+  // Spitznamen anpassen bzw. zurücksetzen
+  if (result.transferred) {
+    await setNick(result.old.id, result.old.orig);
+    if (result.base) await setNick(result.now, nickFor(result.base, "manager", name));
+  } else {
+    if (result.manager) await setNick(result.manager, result.managerOrig);
+    if (result.co) await setNick(result.co, result.coOrig);
+  }
   if (!result.transferred && result.co) await enqueue([{ u: result.co, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Mannschaft aufgelöst – Co-VM entfernt" }]);
   if (!result.transferred && cfg.channels.reg) await sendMessage(cfg.channels.reg, V.freeAgainPost(name, reason));
   await Promise.all([refreshRegPanel(), refreshOverview()]);
@@ -94,10 +108,10 @@ export async function launchTournament({ channelId, name, times, day, date }, { 
     if (!replace) throw new Error("In diesem Kanal läuft bereits ein Turnier.");
     if (T.ACTIVE.includes(old.status)) throw new Error("In diesem Kanal läuft gerade noch ein Cup.");
     old.status = "geloescht";
-    if (old.msgs.panel) await editMessage(channelId, old.msgs.panel, V.signupPanel(old));
+    if (old.msgs.panel) await editMessage(channelId, old.msgs.panel, V.signupPanel(old, await getClubs()));
   }
   const t = T.createTournament({ channelId, name, times, day, date });
-  const msg = await sendMessage(channelId, V.signupPanel(t));
+  const msg = await sendMessage(channelId, V.signupPanel(t, await getClubs()));
   if (!msg) throw new Error(`Ich konnte in <#${channelId}> nichts posten – fehlen dem Bot dort Rechte?`);
   t.msgs.panel = msg.id;
   await set(tKey(channelId), t);
@@ -105,7 +119,7 @@ export async function launchTournament({ channelId, name, times, day, date }, { 
 }
 
 export async function refreshSignup(t) {
-  if (t.msgs.panel) await editMessage(t.channelId, t.msgs.panel, V.signupPanel(t));
+  if (t.msgs.panel) await editMessage(t.channelId, t.msgs.panel, V.signupPanel(t, await getClubs()));
 }
 
 /** Zeiten aus dem Anpfiff: Anmeldeschluss/Auslosung 60 Min. vorher, Check-in-Ende 5 Min. vorher */

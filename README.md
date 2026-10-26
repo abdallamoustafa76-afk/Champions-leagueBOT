@@ -83,6 +83,12 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 - **7-Tage-Regel:** Warnung im Benachrichtigungs-Kanal an Tag 5 und 6, nach 7 Tagen ohne Cup wird der Verein frei.
 - **Cup-Tag:** Anmeldung im Tageskanal → 19:00 Auslosung, Gruppen-Rollen, Check-in im Gruppenkanal (Warteliste checkt im Tageskanal ein) → 19:55 Nachrücker bzw. 0:3-Wertung → Spieltage, beide Mannschaften melden das Ergebnis → K.-o. mit Runden-Rollen → Finale + Spiel um Platz 3 → Siegerbild in der Hall of Fame.
 
+## Anmeldeliste, Freilose & Spitznamen
+
+- Die Anmeldeliste hat oben das Kopfbild **Mannschaft anmelden** (`public/banner-anmeldung.jpg`) und zeigt jede Mannschaft als `🇪🇸 FC Barcelona | @Manager`.
+- **Freilose:** Die Turnierleitung kann im Tageskanal mit `/cl-admin freilos-hinzufügen` bzw. `freilos-entfernen` Freilose setzen (z. B. 7 Mannschaften + 1 Freilos = 8er-Format). Echte Mannschaften haben immer Vorrang. Freilose werden auf verschiedene Gruppen verteilt, verlieren jedes Spiel 0:3 und kommen nie weiter.
+- **Spitznamen:** Wer einen Verein übernimmt, heißt auf dem Server z. B. `Musti VM | Barcelona`, der Co-VM `Yassin CO-VM | Barcelona`. Beim Verlassen, Löschen oder Reset wird der alte Name wiederhergestellt. Discord erlaubt Bots nicht, den Namen des **Serverbesitzers** zu ändern – den musst du bei dir selbst von Hand setzen.
+
 ## Benachrichtigungen
 
 - Der Bot schickt **keine Direktnachrichten**. Stattdessen markiert er die Person im Kanal 🔔 Benachrichtigungen – bei Sperre, aufgehobener oder abgelaufener Sperre, Inaktivitäts-Warnung (Tag 5 und 6) und Reset nach 7 Tagen.

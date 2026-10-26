@@ -10,12 +10,12 @@ const COMMANDS = [
     options: [
       { type: 1, name: "kanal", description: "Einen Kanal verknüpfen", options: [
         { type: 3, name: "typ", description: "Welcher Kanal?", required: true, choices: Object.entries(BASE_CHANNEL_TYPES).map(([value, name]) => ({ name, value })) },
-        { type: 7, name: "kanal", description: "Der Discord-Kanal", required: true, channel_types: [0, 5] },
+        { type: 7, name: "kanal", description: "Leer lassen = der Kanal, in dem du gerade schreibst", required: false, channel_types: [0, 5] },
       ] },
       { type: 1, name: "gruppe", description: "Gruppenkanal oder Ergebniskanal einer Gruppe verknüpfen", options: [
         { type: 3, name: "gruppe", description: "Welche Gruppe?", required: true, choices: ["A", "B", "C", "D", "E", "F", "G", "H"].map((g) => ({ name: "Gruppe " + g, value: g })) },
         { type: 3, name: "art", description: "Welcher Kanal der Gruppe?", required: true, choices: [{ name: "Gruppenkanal (Check-in & Spielplan)", value: "gruppe" }, { name: "Ergebniskanal", value: "ergebnisse" }] },
-        { type: 7, name: "kanal", description: "Der Discord-Kanal", required: true, channel_types: [0, 5] },
+        { type: 7, name: "kanal", description: "Leer lassen = der Kanal, in dem du gerade schreibst", required: false, channel_types: [0, 5] },
       ] },
       { type: 1, name: "rollen", description: "Rollen verknüpfen bzw. fehlende anlegen" },
       { type: 1, name: "panels", description: "Panels posten: Regelwerk, Rollenauswahl, Registrieren, Meine Mannschaft, Übersicht, Sperrliste" },
@@ -27,8 +27,8 @@ const COMMANDS = [
     options: [
       { type: 1, name: "setzen", description: "Tag einstellen oder ändern", options: [
         tag,
-        { type: 7, name: "kanal", description: "Kanal für die Liste, z. B. dein Montag-Kanal", required: true, channel_types: [0, 5] },
         { type: 3, name: "anpfiff", description: "Anpfiff, z. B. 20:00 (Anmeldeschluss 60 Min. vorher, Check-in-Ende 5 Min. vorher)", required: true },
+        { type: 7, name: "kanal", description: "Leer lassen = der Kanal, in dem du gerade schreibst", required: false, channel_types: [0, 5] },
         { type: 3, name: "posten", description: "Uhrzeit, zu der die Liste gepostet wird (Standard: 12:00)" },
         { type: 3, name: "name", description: "Turniername (Standard: Champions League)", max_length: 40 },
       ] },
@@ -57,6 +57,8 @@ const COMMANDS = [
         { type: 4, name: "gast", description: "Tore Gast", required: true, min_value: 0, max_value: 99 },
         { type: 3, name: "elfmeter", description: "Nur K.-o. bei Unentschieden, z. B. 4:3" },
       ] },
+      { type: 1, name: "freilos-hinzufügen", description: "Ein Freilos in die Anmeldeliste dieses Kanals setzen" },
+      { type: 1, name: "freilos-entfernen", description: "Ein Freilos aus der Anmeldeliste dieses Kanals entfernen" },
       { type: 1, name: "abbrechen", description: "Laufendes Turnier abbrechen und Rollen entfernen" },
       { type: 1, name: "verein-freigeben", description: "Einen Verein freigeben (z. B. bei Streit)", options: [
         { type: 3, name: "verein", description: "Vereinsname genau wie in der Übersicht", required: true },

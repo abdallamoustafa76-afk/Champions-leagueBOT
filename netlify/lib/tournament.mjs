@@ -1,5 +1,5 @@
 // Reine Turnierlogik – keine Discord-Aufrufe. Mannschaften werden über den Vereinsnamen identifiziert.
-import { FORMATS, FORMAT_KEYS, KO_SIZE, KO_NAME, GROUP_NAMES } from "./data.mjs";
+import { FORMATS, FORMAT_KEYS, KO_SIZE, KO_NAME, GROUP_NAMES, isFreilos } from "./data.mjs";
 
 export const fmtOf = (n) => FORMAT_KEYS.filter((k) => k <= n).pop() ?? null;
 export const nextFmt = (n) => FORMAT_KEYS.find((k) => k > n) ?? null;
@@ -33,6 +33,21 @@ export function unregister(t, clubName) {
   t.reg = t.reg.filter((c) => c !== clubName);
 }
 
+// ---------- Freilose ----------
+export function addFreilos(t) {
+  if (t.status !== "anmeldung") throw new Error("Freilose gehen nur, solange die Anmeldung offen ist.");
+  let k = 1; while (t.reg.includes(`Freilos ${k}`)) k++;
+  t.reg.push(`Freilos ${k}`);
+  return t.reg.filter(isFreilos).length;
+}
+export function removeFreilos(t) {
+  if (t.status !== "anmeldung") throw new Error("Freilose gehen nur, solange die Anmeldung offen ist.");
+  const last = [...t.reg].reverse().find(isFreilos);
+  if (!last) throw new Error("Es gibt kein Freilos zum Entfernen.");
+  t.reg = t.reg.filter((c) => c !== last);
+  return t.reg.filter(isFreilos).length;
+}
+
 // ---------- Auslosung ----------
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
@@ -58,12 +73,17 @@ export function closeAndDraw(t) {
   const f = fmtOf(t.reg.length);
   if (!f) { t.status = "abgesagt"; return { cancelled: true }; }
   t.fmt = f;
-  t.playing = t.reg.slice(0, f);
-  t.wait = t.reg.slice(f);
+  // Echte Mannschaften zuerst, Freilose füllen nur auf
+  const real = t.reg.filter((c) => !isFreilos(c)), free = t.reg.filter(isFreilos);
+  const ordered = [...real.slice(0, f), ...free, ...real.slice(f)];
+  t.playing = ordered.slice(0, f);
+  t.wait = ordered.slice(f).filter((c) => !isFreilos(c));
   const sizes = FORMATS[f].g;
   t.groups = sizes.map((size, i) => ({ name: GROUP_NAMES[i], size, teams: [] }));
   let gi = 0;
-  for (const c of shuffle([...t.playing])) {
+  // Freilose zuerst verteilen → jedes in eine andere Gruppe
+  const pool = [...shuffle(t.playing.filter(isFreilos)), ...shuffle(t.playing.filter((c) => !isFreilos(c)))];
+  for (const c of pool) {
     while (t.groups[gi % t.groups.length].teams.length >= t.groups[gi % t.groups.length].size) gi++;
     t.groups[gi % t.groups.length].teams.push(c);
     gi++;
@@ -76,8 +96,9 @@ export function closeAndDraw(t) {
     rounds.forEach((pairs, ri) => pairs.forEach(([home, away]) => t.matches.push(newMatch(t, { phase: "gruppe", group: g.name, round: ri + 1, home, away }))));
   }
   t.status = "checkin";
-  t.checked = [];
+  t.checked = t.playing.filter(isFreilos); // Freilose sind automatisch „da“
   t.waitChecked = [];
+  t.out = t.playing.filter(isFreilos);     // … verlieren aber jedes Spiel 0:3 und kommen nie weiter
   return { cancelled: false };
 }
 
@@ -114,7 +135,7 @@ export function finishCheckin(t) {
   if (t.status !== "checkin") throw new Error("Es läuft gerade kein Check-in.");
   const replaced = [], forfeited = [];
   const queue = t.wait.filter((c) => t.waitChecked.includes(c));
-  for (const c of t.playing.filter((c) => !t.checked.includes(c))) {
+  for (const c of t.playing.filter((c) => !t.checked.includes(c) && !isFreilos(c))) {
     const g = groupOf(t, c);
     const rep = queue.shift();
     if (rep) {
