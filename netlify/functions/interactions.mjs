@@ -8,6 +8,7 @@ import * as F from "../lib/flow.mjs";
 import { CLUBS, LEAGUES, GROUP_NAMES, ROUND_ROLES, CHANNEL_TYPES, BASE_CHANNEL_TYPES, DAYS, COLOR, VIDEO_LIMIT, VIDEO_WINDOW_MIN, flagOf } from "../lib/data.mjs";
 import * as B from "../lib/bans.mjs";
 import { baseNameOf, nickFor, setNick } from "../lib/names.mjs";
+import * as AS from "../lib/autosetup.mjs";
 import { parseVienna, parseTime, toMinutes, nextOccurrence, dateKey, shortDate, todayKey, daysBetween, minutesToHHMM } from "../lib/time.mjs";
 
 // ---------- Hilfen ----------
@@ -88,6 +89,27 @@ async function setup(i, context, cfg) {
     await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[o.typ] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
     return eph(`✅ **${CHANNEL_TYPES[o.typ]}** → <#${o.kanal}>`);
   }
+  if (sub.name === "alles") {
+    return background(i, context, async () => {
+      const r = await AS.setupAll({ create: o.fehlende_erstellen ?? true, perms: o.rechte_setzen ?? true, kickoff: o.anpfiff ?? "20:00" });
+      await AS.processSetupJobs(14000);
+      const pr = await AS.setupProgress();
+      const name = (k) => (k.startsWith("day") ? DAYS[Number(k.slice(3)) - 1] : CHANNEL_TYPES[k] || k);
+      const found = Object.keys(r.found);
+      return [
+        "✅ **Einrichtung gestartet**",
+        `👥 Rollen verknüpft bzw. angelegt.`,
+        `🔎 **${found.length} Kanäle erkannt:** ${found.map(name).join(", ") || "–"}`,
+        r.missing.length ? `🆕 **${r.missing.length} Kanäle werden angelegt:** ${r.missing.map((m) => name(m.key)).join(", ")}` : "🆕 Keine fehlenden Kanäle.",
+        r.perms ? "🔒 Rechte werden gesetzt (wer welchen Kanal sieht)." : "🔒 Rechte nicht verändert.",
+        `🗓️ Wochenplan: Anpfiff ${o.anpfiff ?? "20:00"} für alle Tageskanäle.`,
+        "",
+        pr?.left ? `⏳ **${pr.done}/${pr.total} erledigt** – der Rest läuft automatisch weiter (ca. 1–3 Minuten). Danach mit \`/cl-einrichten status\` prüfen.` : "🎉 **Alles erledigt!** Prüfen mit `/cl-einrichten status`.",
+        "",
+        "-# Wichtig: Die Rolle des Bots muss in der Rollenliste ganz oben stehen.",
+      ].join("\n");
+    });
+  }
   if (sub.name === "gruppe") {
     const key = (o.art === "ergebnisse" ? "r" : "g") + o.gruppe;
     await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[key] = o.kanal; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
@@ -113,7 +135,8 @@ async function setup(i, context, cfg) {
     const lines = Object.entries(CHANNEL_TYPES).map(([k, n]) => `${cfg.channels?.[k] ? "✅" : "▫️"} **${n}**${cfg.channels?.[k] ? ` → <#${cfg.channels[k]}>` : ""}`);
     const r = cfg.roles || {};
     const roleOk = r.manager && r.spieler && r.turnierleitung && GROUP_NAMES.every((g) => r.groups?.[g]) && ROUND_ROLES.every((x) => r.rounds?.[x]);
-    return eph(`**Kanäle**\n${lines.join("\n")}\n\n**Rollen:** ${roleOk ? "✅ alle verknüpft" : "⚠️ noch nicht vollständig – `/cl-einrichten rollen`"}\n-# Gruppenkanäle brauchst du nur so viele, wie es Gruppen gibt (8 bei 32 Mannschaften).`);
+    const pr = await AS.setupProgress();
+    return eph(`${pr?.left ? `⏳ **Einrichtung läuft noch:** ${pr.done}/${pr.total} erledigt\n\n` : ""}**Kanäle**\n${lines.join("\n")}\n\n**Rollen:** ${roleOk ? "✅ alle verknüpft" : "⚠️ noch nicht vollständig – `/cl-einrichten rollen`"}\n-# Gruppenkanäle brauchst du nur so viele, wie es Gruppen gibt (8 bei 32 Mannschaften).`);
   }
   return eph("Unbekannter Befehl.");
 }

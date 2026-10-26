@@ -5,10 +5,12 @@ import { listMembers } from "../lib/discord.mjs";
 import { processQueue } from "../lib/roles.mjs";
 import { expireBans } from "../lib/bans.mjs";
 import { runAutoDelete } from "../lib/notify.mjs";
+import { processSetupJobs } from "../lib/autosetup.mjs";
 
 export default async () => {
   const start = Date.now();
   const step = async (name, fn) => { try { await fn(); } catch (e) { console.error(`${name}:`, e?.message || e); } };
+  await step("Einrichtung", () => processSetupJobs(9000));
   await step("Wochenplan", () => runSchedule());
   await step("Turniere", async () => {
     for (const t of await allTournaments()) if (["anmeldung", "checkin", "gruppen"].includes(t.status)) await step(`Turnier ${t.channelId}`, () => runTimers(t));

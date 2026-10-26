@@ -42,6 +42,17 @@ Kanäle ansehen · Nachrichten senden · Links einbetten · Dateien anhängen ·
 
 ## 6. Im Discord einrichten
 
+### Schnell: alles mit einem Befehl
+```
+/cl-einrichten alles anpfiff: 20:00
+```
+Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle am Namen (auch in Schreibschrift), legt fehlende Kanäle in Kategorien an, setzt die Rechte, trägt den Wochenplan für alle Tageskanäle ein und postet alle Panels. Dauert ca. 1–3 Minuten, Fortschritt mit `/cl-einrichten status`.
+- `fehlende_erstellen: False` → nur vorhandene Kanäle verknüpfen, nichts neu anlegen
+- `rechte_setzen: False` → Rechte deiner Kanäle nicht verändern
+- Danach die Bot-Rolle in der Rollenliste ganz nach oben ziehen.
+
+### Oder Schritt für Schritt
+
 1. `/cl-einrichten rollen` → verknüpft vorhandene Rollen (Turnierleitung, Moderator, Manager, Spieler) und legt fehlende an (Gruppe A–H, Achtelfinale, Viertelfinale, Halbfinale, Finale, Spiel um Platz 3).
    **Wichtig:** Rolle des Bots in der Rollenliste **über** all diese Rollen ziehen.
 2. Kanäle verknüpfen – für jeden Kanal einmal:

@@ -8,6 +8,11 @@ const COMMANDS = [
   {
     name: "cl-einrichten", description: "Bot einrichten (Turnierleitung)",
     options: [
+      { type: 1, name: "alles", description: "Alles auf einmal: Rollen, Kanäle erkennen/anlegen, Rechte, Wochenplan, Panels", options: [
+        { type: 3, name: "anpfiff", description: "Anpfiff für alle Tage, z. B. 20:00 (Standard)" },
+        { type: 5, name: "fehlende_erstellen", description: "Fehlende Kanäle automatisch anlegen (Standard: ja)" },
+        { type: 5, name: "rechte_setzen", description: "Rechte der Kanäle automatisch setzen (Standard: ja)" },
+      ] },
       { type: 1, name: "kanal", description: "Einen Kanal verknüpfen", options: [
         { type: 3, name: "typ", description: "Welcher Kanal?", required: true, choices: Object.entries(BASE_CHANNEL_TYPES).map(([value, name]) => ({ name, value })) },
         { type: 7, name: "kanal", description: "Leer lassen = der Kanal, in dem du gerade schreibst", required: false, channel_types: [0, 5] },
