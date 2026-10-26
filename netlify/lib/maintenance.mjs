@@ -94,7 +94,7 @@ export async function reconcileCupRoles(members) {
   if (!t || !T.ACTIVE.includes(t.status)) return;
   const cfg = await getConfig();
   const groupRoles = cfg.roles.groups || {}, roundRoles = cfg.roles.rounds || {};
-  const managed = new Set([...Object.values(groupRoles), ...Object.values(roundRoles)].filter(Boolean));
+  const managed = new Set([...Object.values(groupRoles), ...Object.values(roundRoles), cfg.roles.koPhase].filter(Boolean));
   const pending = new Set(((await get("rolequeue")) || []).map((o) => o.u)); // nicht dazwischenfunken
   const want = new Map();
   for (const u of Object.values(t.members || {}).flat()) want.set(u, new Set());
@@ -102,7 +102,7 @@ export async function reconcileCupRoles(members) {
   if (t.status === "checkin" || t.status === "gruppen") {
     for (const g of t.groups) for (const c of g.teams) if (!t.out.includes(c)) wish(c, groupRoles[g.name]);
   } else {
-    for (const m of T.currentMatches(t)) for (const c of [m.home, m.away]) wish(c, roundRoles[T.koRoleOf(t, c)]);
+    for (const m of T.currentMatches(t)) for (const c of [m.home, m.away]) { wish(c, roundRoles[T.koRoleOf(t, c)]); wish(c, cfg.roles.koPhase); }
   }
   const byId = new Map(members.map((m) => [m.user.id, m]));
   const ops = [];

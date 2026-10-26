@@ -169,7 +169,7 @@ async function setup(i, context, cfg) {
   if (sub.name === "rollen") {
     return background(i, context, async () => {
       const roles = await AS.setupRoles();
-      const missing = [roles.turnierleitung, roles.moderator, roles.support, roles.manager, roles.spieler, ...Object.values(roles.groups), ...Object.values(roles.rounds)].filter((x) => !x).length;
+      const missing = [roles.turnierleitung, roles.moderator, roles.support, roles.manager, roles.spieler, ...Object.values(roles.groups), ...Object.values(roles.rounds), roles.koPhase].filter((x) => !x).length;
       return missing ? `⚠️ ${missing} Rollen konnten nicht angelegt werden – hat der Bot „Rollen verwalten“?` : "✅ Alle Rollen sind verknüpft (vorhandene übernommen, fehlende angelegt). Zieh die Rolle des Bots in der Rollenliste über alle diese Rollen.";
     });
   }

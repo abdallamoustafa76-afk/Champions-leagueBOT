@@ -72,8 +72,8 @@ function overwrites(prof, roles) {
   if (prof === "admins") return [hide]; // nur Server-Admins (sehen ohnehin alles) und der Bot
   if (prof.startsWith("group:")) return [hide, see(roles.groups?.[prof.slice(6)], P.SEND), lead].filter(Boolean);
   if (prof.startsWith("groupres:")) return [hide, see(roles.groups?.[prof.slice(9)], P.SEND, P.FILES), lead].filter(Boolean);
-  if (prof === "ko") return [hide, ...ROUND_ROLES.map((r) => see(roles.rounds?.[r], P.SEND)), lead].filter(Boolean);
-  if (prof === "kores") return [hide, ...ROUND_ROLES.map((r) => see(roles.rounds?.[r], P.SEND, P.FILES)), lead].filter(Boolean);
+  if (prof === "ko") return [hide, see(roles.koPhase, P.SEND), ...ROUND_ROLES.map((r) => see(roles.rounds?.[r], P.SEND)), lead].filter(Boolean);
+  if (prof === "kores") return [hide, see(roles.koPhase, P.SEND, P.FILES), ...ROUND_ROLES.map((r) => see(roles.rounds?.[r], P.SEND, P.FILES)), lead].filter(Boolean);
   return [];
 }
 
@@ -85,6 +85,9 @@ export async function setupRoles() {
   for (const g of GROUP_NAMES) roles.groups[g] = await find(`Gruppe ${g}`, 0x3ba55c);
   const rc = { Achtelfinale: 0x3c9ad6, Viertelfinale: 0x5865f2, Halbfinale: 0x9b59b6, Finale: 0xc9a227, "Spiel um Platz 3": 0xb5763a };
   for (const r of ROUND_ROLES) roles.rounds[r] = await find(r, rc[r]);
+  // Gemeinsame Rolle für alle Teams in der K.-o.-Phase („KO Phase“, „KO-Phase“ … werden erkannt)
+  const norm = (n) => n.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]/g, "");
+  roles.koPhase = existing.find((x) => norm(x.name) === "kophase")?.id ?? (await createRole("KO Phase", 0x3c9ad6))?.id ?? null;
   await mutate("config", (c) => { c.roles = roles; }, { initial: { channels: {}, roles: {} } });
   return roles;
 }

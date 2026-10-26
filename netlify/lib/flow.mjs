@@ -391,7 +391,7 @@ async function startKOSideEffects(t, cfg) {
   const ops = [];
   const groupRoles = Object.values(cfg.roles.groups || {});
   for (const c of t.playing) for (const u of t.members[c] || []) ops.push({ u, rem: groupRoles, why: "Gruppenphase beendet" });
-  for (const c of t.qualified) { const r = T.koRoleOf(t, c); for (const u of t.members[c] || []) ops.push({ u, add: [cfg.roles.rounds?.[r]], why: `K.-o.-Phase: ${r}` }); }
+  for (const c of t.qualified) { const r = T.koRoleOf(t, c); for (const u of t.members[c] || []) ops.push({ u, add: [cfg.roles.rounds?.[r], cfg.roles.koPhase], why: `K.-o.-Phase: ${r}` }); }
   await enqueue(ops);
   for (const g of t.groups) await refreshGroupPlan(t, g.name);
   await sendMessage(t.channelId, { content: `⭐ **Die Gruppenphase ist beendet!** ${t.koSize} Mannschaften stehen im ${T.koRoundName(t, 1)}.` });
@@ -400,12 +400,15 @@ async function startKOSideEffects(t, cfg) {
   await refreshKOResultPanel(await get(tKey(t.channelId)), true);
 }
 
+/** Alle Rollen der K.-o.-Phase: Runden-Rollen + die gemeinsame Rolle „KO Phase“ */
+const koAll = (cfg) => [...Object.values(cfg.roles.rounds || {}), cfg.roles.koPhase].filter(Boolean);
+
 async function koRoundSideEffects(t, cfg, e) {
-  const all = Object.values(cfg.roles.rounds || {});
+  const all = koAll(cfg), kp = cfg.roles.koPhase;
   const ops = [];
   const now = new Set(T.currentMatches(t).flatMap((m) => [m.home, m.away]));
   for (const c of e.losers) if (!now.has(c)) for (const u of t.members[c] || []) ops.push({ u, rem: all, why: "Ausgeschieden" });
-  for (const c of now) { const r = T.koRoleOf(t, c); for (const u of t.members[c] || []) ops.push({ u, add: [cfg.roles.rounds?.[r]], rem: all.filter((x) => x !== cfg.roles.rounds?.[r]), why: `K.-o.: ${r}` }); }
+  for (const c of now) { const r = T.koRoleOf(t, c), rr = cfg.roles.rounds?.[r]; for (const u of t.members[c] || []) ops.push({ u, add: [rr, kp], rem: all.filter((x) => x !== rr && x !== kp), why: `K.-o.: ${r}` }); }
   await enqueue(ops);
   await postKoFreigabe(t, cfg);
   await refreshBracket(t);
@@ -413,7 +416,7 @@ async function koRoundSideEffects(t, cfg, e) {
 }
 
 async function finishCup(t, cfg) {
-  const all = Object.values(cfg.roles.rounds || {});
+  const all = koAll(cfg);
   const ops = [];
   for (const c of t.qualified || []) for (const u of t.members[c] || []) ops.push({ u, rem: all, why: "Turnier beendet" });
   await enqueue(ops);
@@ -462,7 +465,7 @@ async function displayNames(ids) {
 export async function cancelTournament(channelId) {
   const cfg = await getConfig();
   const { value: t } = await mutate(tKey(channelId), (t) => { t.status = "geloescht"; });
-  const roles = [...Object.values(cfg.roles.groups || {}), ...Object.values(cfg.roles.rounds || {})];
+  const roles = [...Object.values(cfg.roles.groups || {}), ...koAll(cfg)];
   const ops = [];
   for (const c of Object.keys(t.members || {})) for (const u of t.members[c]) ops.push({ u, rem: roles, why: "Turnier abgebrochen" });
   await enqueue(ops);
