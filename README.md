@@ -206,6 +206,7 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin verein-freigeben verein` | Verein freigeben |
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
+| `/cl-admin willkommen-test` | Willkommensnachricht testweise für dich selbst posten |
 | `/cl-bewerbung öffnen · schließen` | Staff-Bewerbungen öffnen/schließen (nur Server-Admins) |
 | `/cl-admin ea-verknüpfen verein [ea_id]` | EA-Club neu suchen oder ID direkt eintragen |
 

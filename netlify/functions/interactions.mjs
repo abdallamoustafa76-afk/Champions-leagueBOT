@@ -1,6 +1,6 @@
 import nacl from "tweetnacl";
 import { get, set, mutate, getConfig, getClubs, tKey } from "../lib/store.mjs";
-import { editOriginal, discord } from "../lib/discord.mjs";
+import { editOriginal, discord, sendMessage } from "../lib/discord.mjs";
 import { enqueue, processQueue } from "../lib/roles.mjs";
 import * as T from "../lib/tournament.mjs";
 import * as V from "../lib/views.mjs";
@@ -172,7 +172,9 @@ async function setup(i, context, cfg) {
     const r = cfg.roles || {};
     const roleOk = r.manager && r.spieler && r.turnierleitung && GROUP_NAMES.every((g) => r.groups?.[g]) && ROUND_ROLES.every((x) => r.rounds?.[x]);
     const pr = await AS.setupProgress();
-    return eph(`${pr?.left ? `⏳ **Einrichtung läuft noch:** ${pr.done}/${pr.total} erledigt\n\n` : ""}**Kanäle**\n${lines.join("\n")}\n\n**Rollen:** ${roleOk ? "✅ alle verknüpft" : "⚠️ noch nicht vollständig – `/cl-einrichten rollen`"}\n-# Gruppenkanäle brauchst du nur so viele, wie es Gruppen gibt (8 bei 32 Mannschaften).`);
+    const memOk = !!(await discord(`/guilds/${process.env.DISCORD_GUILD_ID}/members?limit=1`));
+    const memLine = memOk ? "**Mitgliederliste:** ✅ lesbar (Willkommen & Rollen-Abgleich laufen)" : "**Mitgliederliste:** ❌ nicht lesbar – im Discord Developer Portal unter *Bot* den **Server Members Intent** einschalten. Ohne den gibt es keine Willkommensnachrichten.";
+    return eph(`${memLine}\n\n${pr?.left ? `⏳ **Einrichtung läuft noch:** ${pr.done}/${pr.total} erledigt\n\n` : ""}**Kanäle**\n${lines.join("\n")}\n\n**Rollen:** ${roleOk ? "✅ alle verknüpft" : "⚠️ noch nicht vollständig – `/cl-einrichten rollen`"}\n-# Gruppenkanäle brauchst du nur so viele, wie es Gruppen gibt (8 bei 32 Mannschaften).`);
   }
   return eph("Unbekannter Befehl.");
 }
@@ -266,6 +268,13 @@ async function admin(i, context, cfg) {
       const t = (await F.activeTournament()) || (await EAF.latestTournament(i.channel_id));
       if (!t) throw new Error("Es gibt noch kein Turnier.");
       return `🎮 **EA-Daten fürs TOTT · ${t.name}**${EAF.eaEnabled() ? "" : "\n⛔ Das TOTT ist ausgeschaltet (EA_AUTO=0)."}\n${await EAF.eaStatus(t)}`.slice(0, 1990);
+    });
+  }
+  if (sub.name === "willkommen-test") {
+    if (!cfg.channels.welcome) return eph("Der Willkommens-Kanal ist noch nicht verknüpft: `/cl-einrichten kanal typ: Willkommen`.");
+    return background(i, context, async () => {
+      const m = await sendMessage(cfg.channels.welcome, V.welcomePost(uidOf(i), cfg.channels));
+      return m ? `✅ Test-Begrüßung in <#${cfg.channels.welcome}> gepostet.` : "❌ Ich konnte im Willkommens-Kanal nicht posten – fehlen dem Bot dort die Rechte „Nachrichten senden“ und „Links einbetten“?";
     });
   }
   if (sub.name === "tott") {

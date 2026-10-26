@@ -11,16 +11,17 @@ import { runCleanup } from "../lib/cleanup.mjs";
 export default async () => {
   const start = Date.now();
   const step = async (name, fn) => { try { await fn(); } catch (e) { console.error(`${name}:`, e?.message || e); } };
+  // Mitglieder zuerst laden und begrüßen, damit die Willkommensnachricht nicht hinter langen Schritten wartet
+  let members = null;
+  await step("Mitglieder laden", async () => { members = await listMembers(); });
+  await step("Willkommen", () => welcomeNewMembers(members));
   await step("Einrichtung", () => processSetupJobs(9000));
   await step("Wochenplan", () => runSchedule());
   await step("Turniere", async () => {
     for (const t of await allTournaments()) if (["anmeldung", "checkin", "gruppen"].includes(t.status)) await step(`Turnier ${t.channelId}`, () => runTimers(t));
   });
   await step("Ergebnisse automatisch bestätigen", () => runAutoConfirm());
-  let members = null;
-  await step("Mitglieder laden", async () => { members = await listMembers(); });
   await step("Rollen-Abgleich", () => syncManagerRoles(members));
-  await step("Willkommen", () => welcomeNewMembers(members));
   await step("Inaktivität", () => dailyInactivity());
   await step("Sperren", () => expireBans());
   await step("Benachrichtigungen löschen", () => runAutoDelete());

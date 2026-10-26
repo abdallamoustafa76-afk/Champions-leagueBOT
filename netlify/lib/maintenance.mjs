@@ -62,15 +62,23 @@ export async function dailyInactivity(now = Date.now()) {
   }
 }
 
-/** Neue Mitglieder begrüßen (Mitgliederliste wird jede Minute verglichen) */
+const WELCOME_WINDOW = 15 * 60000; // wer in den letzten 15 Min. beigetreten ist und noch nicht begrüßt wurde
+
+/**
+ * Neue Mitglieder begrüßen. Maßgeblich ist der Beitrittszeitpunkt (joined_at) – so geht niemand verloren,
+ * wenn ein Durchlauf mal ausfällt, und es gibt keine Massen-Begrüßung, wenn die Liste einmal unvollständig ist.
+ */
 export async function welcomeNewMembers(members) {
   const cfg = await getConfig();
-  if (!members) return;
-  const ids = members.filter((m) => !m.user.bot).map((m) => m.user.id);
-  const known = await get("knownMembers");
-  await set("knownMembers", ids);
-  if (!known || !cfg.channels.welcome) return; // erster Lauf: nur merken, niemanden begrüßen
-  const old = new Set(known);
-  const fresh = ids.filter((id) => !old.has(id)).slice(0, 10);
-  for (const id of fresh) await sendMessage(cfg.channels.welcome, welcomePost(id, cfg.channels));
+  if (!members || !cfg.channels.welcome) return;
+  const now = Date.now();
+  const fresh = members.filter((m) => !m.user.bot && now - Date.parse(m.joined_at) < WELCOME_WINDOW);
+  if (!fresh.length) return;
+  const { result: todo } = await mutate("welcomed", (w) => {
+    for (const [id, at] of Object.entries(w)) if (now - at > 86400000) delete w[id]; // nach einem Tag vergessen
+    const list = fresh.filter((m) => !w[m.user.id]).slice(0, 10);
+    for (const m of list) w[m.user.id] = now; // vorher eintragen → nie doppelt
+    return list.map((m) => m.user.id);
+  }, { initial: {} });
+  for (const id of todo) await sendMessage(cfg.channels.welcome, welcomePost(id, cfg.channels));
 }
