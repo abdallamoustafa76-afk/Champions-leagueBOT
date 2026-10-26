@@ -109,6 +109,20 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - **Freilose:** Die Turnierleitung kann im Tageskanal mit `/cl-admin freilos-hinzufügen` bzw. `freilos-entfernen` Freilose setzen (z. B. 7 Mannschaften + 1 Freilos = 8er-Format). Echte Mannschaften haben immer Vorrang. Freilose werden auf verschiedene Gruppen verteilt, verlieren jedes Spiel 0:3 und kommen nie weiter.
 - **Spitznamen:** Wer einen Verein übernimmt, heißt auf dem Server z. B. `Musti VM | Barcelona`, der Co-VM `Yassin CO-VM | Barcelona`. Beim Verlassen, Löschen oder Reset wird der alte Name wiederhergestellt. Discord erlaubt Bots nicht, den Namen des **Serverbesitzers** zu ändern – den musst du bei dir selbst von Hand setzen.
 
+## Trophäenhalle
+
+- Kanal 🏅 Trophäenhalle (alle sehen, nur Bot schreibt). Ein Post mit Bild, der sich nach jedem Cup aktualisiert: Medaillenspiegel der Vereine (🥇 Titel, 🥈 Finals, 🥉 Platz 3), Top-Manager, Rekorde (meiste Tore in einem Cup, höchster Sieg, Titel in Folge, meiste Cups) und die letzten 5 Sieger.
+- Button **Meine Statistik**: jeder sieht privat seine Titel, Finals, Spiele, Siege, Tore, Tordifferenz und seine Vitrine.
+- Medaillen und Statistiken zählen für den Verein **und** für die Personen (Manager und Co-VM) – auch nach einem Vereinswechsel.
+- Freilose und kampflose Wertungen zählen nicht in die Spiel- und Torstatistik.
+- Nur die Statistik zurücksetzen: `/cl-einrichten zurücksetzen umfang: Nur Statistik` (Vereine, Manager, Einrichtung und Hall of Fame bleiben). `umfang: Alles` löscht sie ebenfalls.
+
+## Aufräumen nach dem Cup
+
+- **30 Minuten nach dem Finale** (oder nach Absage/Abbruch) löscht der Bot alle Nachrichten dieses Cups in: Gruppe A–H, A–H-Ergebnisse, KO-Phase, KO-Ergebnisse, Live-Spielplan, dem Tageskanal des Cups und im Turnierleitungs-Kanal (nur Nachrichten seit Beginn des Cups) – auch Nachrichten der Spieler.
+- Hall of Fame, Regelwerk, Rollenauswahl, Mannschaftsübersicht, Sperrliste und die anderen festen Posts bleiben stehen.
+- Die Wartezeit steht in `netlify/lib/cleanup.mjs` (`CLEANUP_DELAY_MIN`).
+
 ## Benachrichtigungen
 
 - Der Bot schickt **keine Direktnachrichten**. Stattdessen markiert er die Person im Kanal 🔔 Benachrichtigungen – bei Sperre, aufgehobener oder abgelaufener Sperre, Inaktivitäts-Warnung (Tag 5 und 6) und Reset nach 7 Tagen.

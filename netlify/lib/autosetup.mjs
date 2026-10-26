@@ -22,6 +22,7 @@ const PLAN = [
   ...DAYS.map((d, i) => ({ key: "day" + (i + 1), name: "🗓️・" + fancy(d), cat: "cl", prof: "public", day: i + 1 })),
   { key: "live", name: "📺・" + fancy("Live-Spielplan"), cat: "cl", prof: "public" },
   { key: "hof", name: "🏆・" + fancy("Hall-of-Fame"), cat: "cl", prof: "public" },
+  { key: "trophy", name: "🏅・" + fancy("Trophaeenhalle"), cat: "cl", prof: "public" },
   { key: "ban", name: "🚫・" + fancy("Sperrliste"), cat: "cl", prof: "public" },
   { key: "log", name: "📢・" + fancy("Turnierleitung"), cat: "cl", prof: "staff" },
   ...GROUP_NAMES.flatMap((g) => [
@@ -43,7 +44,7 @@ export function detectKey(rawName) {
   if (n.includes("kophase")) return "ko";
   const day = DAYS.findIndex((d) => n === d.toLowerCase());
   if (day >= 0) return "day" + (day + 1);
-  const map = [["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
+  const map = [["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
   for (const [kw, key] of map) if (n.includes(kw)) return key;
   if (n === "regeln") return "rules";
   return null;
@@ -143,6 +144,7 @@ export async function processSetupJobs(budgetMs = 8000) {
     if (job.k === "zeit") await setDay(job.day, job.ch, job.kickoff);
     if (job.k === "panels") {
       await refreshRulesPanel(); await refreshRolesPanel(); await refreshRegPanel(); await refreshTeamPanel(); await refreshOverview(); await refreshBanPanel();
+      await (await import("./trophies.mjs")).refreshTrophyPanel();
     }
     await mutate("setupjobs", (x) => {
       const j = x.list[0];
@@ -174,10 +176,19 @@ export { PLAN, CHANNEL_TYPES };
  * Discord-Kanäle und -Rollen selbst bleiben bestehen.
  */
 export async function resetBot(scope = "setup") {
+  if (scope === "stats") {
+    await del("stats");
+    await mutate("clubs", (cl) => { for (const c of Object.values(cl)) { c.cups = 0; c.titles = 0; } }, { initial: {} });
+    const TR = await import("./trophies.mjs");
+    await TR.refreshTrophyPanel();
+    const F = await import("./flow.mjs");
+    await F.refreshOverview();
+    return { deleted: 0, scope, nicks: 0 };
+  }
   const cfg = await getConfig();
   const panels = (await get("panels")) || {};
   const ch = cfg.channels || {};
-  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], ...(panels.over || []).map((id) => [ch.over, id])];
+  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], [ch.trophy, panels.trophy], ...(panels.over || []).map((id) => [ch.over, id])];
   let deleted = 0;
   for (const [c, id] of msgs) if (c && id && (await deleteMessage(c, id))) deleted++;
   for (const k of ["config", "panels", "zeitplan", "setupjobs"]) await del(k);
@@ -191,7 +202,7 @@ export async function resetBot(scope = "setup") {
       if (c.manager && (await setNick(c.manager, c.managerOrigNick ?? null))) res.nicks++;
       if (c.co && (await setNick(c.co, c.coOrigNick ?? null))) res.nicks++;
     }
-    for (const k of ["clubs", "bans", "rules", "mreq", "managers", "knownMembers", "rolequeue", "autodelete", "daily", "active"]) await del(k);
+    for (const k of ["clubs", "stats", "bans", "rules", "mreq", "managers", "knownMembers", "rolequeue", "autodelete", "daily", "active"]) await del(k);
     for (const k of await keys("t:")) await del(k);
   }
   return res;

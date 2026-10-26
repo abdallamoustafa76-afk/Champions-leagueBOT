@@ -25,6 +25,7 @@ const COMMANDS = [
       { type: 1, name: "rollen", description: "Rollen verknüpfen bzw. fehlende anlegen" },
       { type: 1, name: "zurücksetzen", description: "Einrichtung (oder alles) zurücksetzen – mit Sicherheitsabfrage", options: [
         { type: 3, name: "umfang", description: "Was soll zurückgesetzt werden?", required: true, choices: [
+          { name: "Nur Statistik (Trophäenhalle, Titel & Cups)", value: "stats" },
           { name: "Nur Einrichtung (Kanäle, Wochenplan, Panels)", value: "setup" },
           { name: "Alles (auch Vereine, Sperren, Turniere, Regeln)", value: "all" },
         ] },

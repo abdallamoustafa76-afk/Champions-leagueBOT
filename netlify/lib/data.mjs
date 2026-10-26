@@ -58,6 +58,7 @@ export const BASE_CHANNEL_TYPES = {
   roles: "Rollenauswahl",
   notify: "Benachrichtigungen",
   rules: "Regelwerk",
+  trophy: "Trophäenhalle",
   reg: "Team-registrieren",
   team: "Meine-Mannschaft",
   over: "Mannschaftsübersicht",
@@ -78,6 +79,7 @@ export const CHANNEL_TYPES = {
   welcome: "Willkommen",
   roles: "Rollenauswahl",
   notify: "Benachrichtigungen",
+  trophy: "Trophäenhalle",
   ko: "KO-Phase",
   kor: "KO-Phase · Ergebnisse",
   log: "Turnierleitung (Log)",
@@ -116,3 +118,5 @@ export const RULES = {
     ["⚖️ Fairness geht vor", "Unser Ziel ist ein wettbewerbsfähiges und faires Turnier, bei dem Können wichtiger ist als das Ausnutzen von Vorteilen.\nMit der Teilnahme am Champions League Cup akzeptiert jeder Spieler dieses Regelwerk und verpflichtet sich, es einzuhalten.\n\n**Champions League Cup – Respekt. Fairness. Wettbewerb.** ⭐"],
   ],
 };
+
+export const FREIGABE_MIN = 5; // maximale Freigabezeit: so viele Minuten nach der Freigabe muss angepfiffen sein

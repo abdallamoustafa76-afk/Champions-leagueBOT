@@ -110,6 +110,10 @@ async function setup(i, context, cfg) {
       ].join("\n");
     });
   }
+  if (sub.name === "zurücksetzen" && o.umfang === "stats") {
+    return eph("⚠️ **Statistik zurücksetzen?**\nGelöscht werden: Medaillenspiegel, Top-Manager, Rekorde, letzte Sieger, alle persönlichen Statistiken sowie Titel- und Cup-Zähler der Vereine. Die Trophäenhalle startet wieder bei null.\nVereine, Manager, Sperren, Einrichtung und die Hall of Fame bleiben erhalten. Das kann nicht rückgängig gemacht werden.",
+      { components: [{ type: 1, components: [{ type: 2, style: 2, label: "Abbrechen", custom_id: "reset_no" }, { type: 2, style: 4, label: "Ja, Statistik zurücksetzen", custom_id: "reset_ok:stats" }] }] });
+  }
   if (sub.name === "zurücksetzen") {
     const all = o.umfang === "all";
     return eph(all
@@ -136,7 +140,7 @@ async function setup(i, context, cfg) {
     });
   }
   if (sub.name === "panels") {
-    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste gepostet bzw. aktualisiert."; });
+    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); await (await import("../lib/trophies.mjs")).refreshTrophyPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Trophäenhalle, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht und Sperrliste gepostet bzw. aktualisiert."; });
   }
   if (sub.name === "status") {
     const lines = Object.entries(CHANNEL_TYPES).map(([k, n]) => `${cfg.channels?.[k] ? "✅" : "▫️"} **${n}**${cfg.channels?.[k] ? ` → <#${cfg.channels[k]}>` : ""}`);
@@ -196,7 +200,7 @@ async function manualCup(i, context) {
 async function admin(i, context, cfg) {
   const sub = i.data.options[0], o = opts(sub.options);
   if (sub.name === "anmeldeschluss") return background(i, context, async () => { const t = await get(tKey(i.channel_id)); if (!t || t.status !== "anmeldung") throw new Error("In diesem Kanal ist keine Anmeldung offen."); await F.doDraw(i.channel_id); return "✅ Anmeldung geschlossen und ausgelost."; });
-  if (sub.name === "checkin-ende") return background(i, context, async () => { const t = await resolveTournament(i); if (t.status !== "checkin") throw new Error("Es läuft gerade kein Check-in."); await F.doCheckinEnd(t.channelId); return "✅ Check-in beendet."; });
+  if (sub.name === "checkin-ende") return background(i, context, async () => { const t = await resolveTournament(i); if (t.status !== "checkin") throw new Error("Es läuft gerade kein Check-in."); await F.doCheckinEnd(t.channelId); await F.doKickoff(t.channelId); return "✅ Check-in beendet – Spieltag 1 ist sofort freigegeben."; });
   if (sub.name === "spiele") {
     const t = await resolveTournament(i);
     const open = T.currentMatches(t).filter((m) => m.status !== "fertig");
@@ -248,6 +252,9 @@ async function component(i, context) {
   const cfg = await getConfig();
   const id = i.data.custom_id, uid = uidOf(i);
 
+  // --- Trophäenhalle ---
+  if (id === "stats_me") return eph(await (await import("../lib/trophies.mjs")).myStats(uid));
+
   // --- Zurücksetzen ---
   if (id === "reset_no") return reply(i, { content: "Abgebrochen – nichts wurde verändert.", components: [] });
   if (id.startsWith("reset_ok:")) {
@@ -255,6 +262,7 @@ async function component(i, context) {
     const scope = id.split(":")[1];
     return background(i, context, async () => {
       const r = await AS.resetBot(scope);
+      if (scope === "stats") return "✅ **Statistik zurückgesetzt.** Die Trophäenhalle startet wieder bei null.";
       return `✅ **${scope === "all" ? "Alles" : "Einrichtung"} zurückgesetzt.** ${r.deleted} Panel-Posts gelöscht${scope === "all" ? `, ${r.nicks} Spitznamen zurückgesetzt` : ""}.\nNeu einrichten mit \`/cl-einrichten alles\`.`;
     }, { update: true });
   }

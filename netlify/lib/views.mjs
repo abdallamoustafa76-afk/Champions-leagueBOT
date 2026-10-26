@@ -1,5 +1,5 @@
 // Alle Discord-Ansichten (Embeds, Buttons, Formulare). Alle Ränder in Blau.
-import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS, BAN_DEFAULT_DAYS, VIDEO_LIMIT, VIDEO_WINDOW_MIN, RULES, isFreilos, flagOf, club as clubInfo, clubIndex } from "./data.mjs";
+import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS, BAN_DEFAULT_DAYS, VIDEO_LIMIT, VIDEO_WINDOW_MIN, RULES, FREIGABE_MIN, isFreilos, flagOf, club as clubInfo, clubIndex } from "./data.mjs";
 import { fmtOf, nextFmt, standings, currentMatches, winner, koRoundName } from "./tournament.mjs";
 
 const FOOTER = { text: "Champions League Bot" };
@@ -284,6 +284,7 @@ export function resultConfirmed(m, byAdmin) {
 
 // ---------- Live-Spielplan ----------
 export function livePlan(t) {
+  // Fortschritt: ✅ Spieltag 1 › 🔴 Spieltag 2 › Spieltag 3 › Halbfinale › Finale
   const steps = [];
   for (let r = 1; r <= t.maxRounds; r++) steps.push({ k: "g", r, n: `Spieltag ${r}` });
   let n = t.koSize || KO_SIZE[t.fmt], kr = 1;
@@ -291,24 +292,51 @@ export function livePlan(t) {
   steps.push({ k: "k", r: kr, n: "Finale" });
   const on = (s) => (t.status === "gruppen" && s.k === "g" && s.r === t.round) || (t.status === "ko" && s.k === "k" && s.r === t.koRound);
   const done = (s) => t.status === "fertig" || (s.k === "g" && (t.status === "ko" || (t.status === "gruppen" && s.r < t.round))) || (s.k === "k" && t.status === "ko" && s.r < t.koRound);
-  const prog = steps.map((s) => (on(s) ? `**▶ ${s.n}**` : done(s) ? `~~${s.n}~~` : s.n)).join(" · ");
+  const prog = steps.map((s) => (on(s) ? `🔴 **${s.n}**` : done(s) ? `✅ ${s.n}` : s.n)).join(" › ");
   const cur = currentMatches(t);
-  const now = t.status === "checkin" ? `**Check-in läuft** · Anpfiff ${hhmm(t.times.kickoff)}` : t.status === "fertig" ? "**Turnier beendet**" : `**Jetzt:** ${t.status === "gruppen" ? `Spieltag ${t.round}` : koRoundName(t) + (cur.some((m) => m.p3) ? " + Spiel um Platz 3" : "")} · **${cur.filter((m) => m.status === "fertig").length}/${cur.length}** Spiele beendet`;
-  const embeds = [{ color: COLOR, title: `⭐ LIVE-SPIELPLAN · ${t.name.toUpperCase()}`, description: `${prog}\n\n${now}` }];
+  const status =
+    t.status === "checkin" ? `🕗 **Check-in läuft** · ${t.fmt}er-Format · Anpfiff ${hhmm(t.times.kickoff)}`
+    : t.status === "fertig" ? `🏆 **Turnier beendet** · ${t.fmt}er-Format`
+    : `🔴 **${t.status === "gruppen" ? `Spieltag ${t.round}` : koRoundName(t) + (cur.some((m) => m.p3) ? " + Spiel um Platz 3" : "")} läuft** · ${cur.filter((m) => m.status === "fertig").length}/${cur.length} Spiele beendet · ${t.fmt}er-Format`;
+
+  // Ein Spiel als Zeile mit Status
+  const icon = (m) => (m.status === "fertig" ? "✅" : m.status === "konflikt" ? "⚠️" : m.pendingBy ? "⏳" : t.status === "checkin" ? "🕗" : "🔴");
+  const sc = (m) => (m.status === "fertig" ? `\`${m.h}:${m.a}\`${m.pen ? ` (${m.pen[0]}:${m.pen[1]} i.E.)` : ""}` : "`–:–`");
+  const mline = (m) => `${icon(m)} ${flagOf(m.home)} **${esc(m.home)}** ${sc(m)} **${esc(m.away)}** ${flagOf(m.away)}`;
+
+  const d = FORMATS[t.fmt];
+  const parts = [];
   if (t.status === "checkin" || t.status === "gruppen") {
+    const r = t.status === "checkin" ? 1 : t.round;
+    const budget = Math.floor(3300 / Math.max(1, t.groups.length));
     for (const g of t.groups) {
-      const r = t.status === "checkin" ? 1 : t.round;
       const ms = t.matches.filter((m) => m.group === g.name && m.round === r);
-      const tab = standings(t, g.name).map((x, i) => `${i + 1}. ${esc(x.id)} – ${x.p} Pkt`).join("\n");
-      embeds.push({ color: COLOR, title: `Gruppe ${g.name} · Spieltag ${r}`, description: `${ms.length ? ms.map((m) => matchLine(m, false) + (m.status !== "fertig" && t.status === "gruppen" ? " · läuft" : "")).join("\n") : "_spielfrei_"}\n\n${tab}`.slice(0, 4096) });
+      const tab = standings(t, g.name).map((x, k) => {
+        const out = isFreilos(x.id) || t.out?.includes(x.id);
+        const mark = out ? "⬛" : k < d.top ? "🟩" : k === d.top && d.ex ? "🟨" : "⬛";
+        const td = x.t - x.gt;
+        return `${mark} \`${k + 1}\` ${flagOf(x.id)} ${esc(x.id)} · **${x.p} Pkt** · TD ${td > 0 ? "+" + td : td}`;
+      });
+      parts.push(`### ⚽ Gruppe ${g.name} · Spieltag ${r}\n${ms.length ? ms.map(mline).join("\n") : "_spielfrei_"}\n\n${tab.join("\n")}`.slice(0, budget));
     }
   }
   if (t.status === "ko") {
-    const lbl = (m) => (m.p3 ? "Platz 3" : m.final ? "Finale" : `Spiel ${m.slot + 1}`);
-    embeds.push({ color: COLOR, title: koRoundName(t) + (cur.some((m) => m.p3) ? " + Spiel um Platz 3" : ""), description: cur.sort((a, b) => a.slot - b.slot).map((m) => `\`${lbl(m)}\` ${matchLine(m, false)}${m.status !== "fertig" ? " · läuft" : ""}`).join("\n") });
+    const lbl = (m) => (m.p3 ? "🥉 Platz 3" : m.final ? "🏆 Finale" : `Spiel ${m.slot + 1}`);
+    parts.push(`### ⚔️ ${koRoundName(t)}${cur.some((m) => m.p3) ? " + Spiel um Platz 3" : ""}\n` + cur.sort((a, b) => a.slot - b.slot).map((m) => `\`${lbl(m)}\` ${mline(m)}`).join("\n"));
   }
-  if (t.status === "fertig" && t.podium) embeds.push({ color: COLOR, title: "🏆 Endstand", description: t.podium.map((c, i) => `${["🥇", "🥈", "🥉"][i]} ${teamLine(c)}`).join("\n") });
-  return { embeds: embeds.slice(0, 10) };
+  if (t.status === "fertig" && t.podium) parts.push("### 🏆 Endstand\n" + t.podium.map((c, i) => `${["🥇", "🥈", "🥉"][i]} ${teamLine(c)}`).join("\n"));
+  const legend = t.status === "gruppen" || t.status === "checkin"
+    ? `-# 🟩 weiter${d.ex ? ` · 🟨 ${d.top === 1 ? "beste Zweite" : "beste Dritte"}` : ""} · ⬛ raus · ✅ bestätigt · 🔴 läuft · ⏳ wartet auf Bestätigung · aktualisiert <t:${unix(Date.now())}:t>`
+    : `-# ✅ bestätigt · 🔴 läuft · ⏳ wartet auf Bestätigung · aktualisiert <t:${unix(Date.now())}:t>`;
+  return {
+    flags: V2,
+    components: [box(
+      txt(`## 📺 Live-Spielplan · ${esc(t.name)}\n${status}\n-# ${prog}`),
+      ...parts.flatMap((p) => [line(), txt(p)]),
+      line(),
+      txt(legend),
+    )],
+  };
 }
 
 // ---------- K.-o.-Phase ----------
@@ -321,7 +349,7 @@ export function koRoundPost(t, members, roleIds, resultChannel) {
   const desc = fin ? `**🏆 Finale**\n${pair(fin)}${p3 ? `\n\n**🥉 Spiel um Platz 3**\n${pair(p3)}` : ""}` : cur.map(pair).join("\n\n");
   const userIds = cur.flatMap((m) => [...(members[m.home] || []), ...(members[m.away] || [])]);
   return {
-    content: `${roles.filter(Boolean).map((r) => `<@&${r}>`).join(" ")} **${fin ? "Finale und Spiel um Platz 3 – beide gleichzeitig!" : t.koRound === 1 ? "Die K.-o.-Phase beginnt!" : `Das ${name} steht!`}**`,
+    content: `${roles.filter(Boolean).map((r) => `<@&${r}>`).join(" ")} 🟢 **FREIGABE · ${fin ? "Finale & Spiel um Platz 3" : name}** – ihr dürft jetzt spielen!${fin ? " Beide Spiele laufen gleichzeitig." : ""}\n${freigabeWindow()}`,
     allowed_mentions: { roles: roles.filter(Boolean), users: userIds },
     embeds: [{ color: COLOR, title: fin ? "🏆 Finale & Spiel um Platz 3" : `⚔️ ${name}`, description: desc + (resultChannel ? `\n\n📋 Ergebnisse und Größenvideos: <#${resultChannel}>` : "") + "\n\n-# Unentschieden? Dann Elfmeterschießen mit angeben.", footer: FOOTER }],
     components: resultChannel ? [] : [row(btn("Ergebnis melden", "res_open", 1, { emoji: { name: "⚽" } }), btn("Größenvideo anfordern", "vid_req", 2, { emoji: { name: "📏" } }))],
@@ -538,5 +566,35 @@ export function managerRequest(uid, rulesOk, state = "offen", byId = null) {
   return {
     embeds: [{ color: COLOR, title: "👔 Manager-Anfrage", description: `<@${uid}> möchte Manager werden.\nRegelwerk akzeptiert: ${rulesOk ? "✅" : "❌ noch nicht"}${status}` }],
     components: state === "offen" ? [row(btn("Annehmen", `mreq_ok:${uid}`, 3, { emoji: { name: "✅" } }), btn("Ablehnen", `mreq_no:${uid}`, 4, { emoji: { name: "❌" } }))] : [],
+  };
+}
+
+// ---------- Spielfreigabe ----------
+/** Freigabe einer Runde im Gruppenkanal: Ping an die Gruppe, Paarungen mit Managern */
+/** Freigabe-Zeitfenster, z. B. 20:00 – 20:05 (auf die Minute abgerundet) */
+export function freigabeWindow(at = Date.now()) {
+  const start = Math.floor(at / 60000) * 60000, end = start + FREIGABE_MIN * 60000;
+  return `🕗 **Freigabe:** <t:${unix(start)}:t> – <t:${unix(end)}:t> · spätestens <t:${unix(end)}:t> anpfeifen (<t:${unix(end)}:R>)`;
+}
+
+export function freigabePost(t, g, round, roleId, resultCh) {
+  const ms = t.matches.filter((m) => m.group === g.name && m.round === round);
+  const mgr = (c) => (isFreilos(c) ? "" : t.members?.[c]?.[0] ? ` <@${t.members[c][0]}>` : "");
+  const pairs = ms.map((m) => {
+    const free = isFreilos(m.home) || isFreilos(m.away);
+    return `${flagOf(m.home)} **${esc(m.home)}**${mgr(m.home)}  vs  **${esc(m.away)}**${mgr(m.away)} ${flagOf(m.away)}${free ? "\n-# 🎟️ Freilos – wird automatisch 3:0 gewertet" : ""}`;
+  });
+  const playing = new Set(ms.flatMap((m) => [m.home, m.away]));
+  const bye = g.teams.filter((c) => !playing.has(c) && !isFreilos(c));
+  return {
+    flags: V2,
+    allowed_mentions: { roles: roleId ? [roleId] : [] },
+    components: [box(
+      txt(`${roleId ? `<@&${roleId}> ` : ""}\n## 🟢 FREIGABE · Spieltag ${round}\nGruppe ${g.name} – **ihr dürft jetzt spielen!**\n${freigabeWindow()}`),
+      line(),
+      txt("### ⚽ Paarungen\n" + (pairs.length ? pairs.join("\n") : "_spielfrei_") + (bye.length ? `\n\n💤 Spielfrei: ${bye.map((c) => `${flagOf(c)} ${esc(c)}`).join(", ")}` : "")),
+      line(),
+      txt(`📋 Nach dem Spiel das Ergebnis ${resultCh ? `in <#${resultCh}>` : "über den Button im Spielplan"} eintragen – der Gegner bestätigt.\n-# Die nächste Runde wird automatisch freigegeben, sobald alle Spiele dieser Runde bestätigt sind.`),
+    )],
   };
 }

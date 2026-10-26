@@ -6,6 +6,7 @@ import { processQueue } from "../lib/roles.mjs";
 import { expireBans } from "../lib/bans.mjs";
 import { runAutoDelete } from "../lib/notify.mjs";
 import { processSetupJobs } from "../lib/autosetup.mjs";
+import { runCleanup } from "../lib/cleanup.mjs";
 
 export default async () => {
   const start = Date.now();
@@ -23,6 +24,7 @@ export default async () => {
   await step("Inaktivität", () => dailyInactivity());
   await step("Sperren", () => expireBans());
   await step("Benachrichtigungen löschen", () => runAutoDelete());
+  await step("Aufräumen nach dem Cup", () => runCleanup(8000));
   await step("Rollen-Warteschlange", () => processQueue(Math.max(3000, 26000 - (Date.now() - start))));
 };
 

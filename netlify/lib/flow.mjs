@@ -7,6 +7,7 @@ import * as V from "./views.mjs";
 import { DAYS, ROUND_ROLES, RULES_VERSION, flagOf } from "./data.mjs";
 import { viennaParts, viennaAt, shortDate, todayKey } from "./time.mjs";
 import { setNick, nickFor } from "./names.mjs";
+import { scheduleCleanup } from "./cleanup.mjs";
 
 // ---------- Hilfen ----------
 export function clubOfUser(clubs, uid) {
@@ -156,6 +157,7 @@ export async function doDraw(channelId) {
   await refreshSignup(t);
   if (result.cancelled) {
     await sendMessage(channelId, { content: result.busy ? "⚠️ **Der Cup fällt aus** – es läuft gerade noch ein anderer Cup." : `⚠️ **Der Cup fällt heute aus** – nur ${t.reg.length} ${t.reg.length === 1 ? "Mannschaft" : "Mannschaften"} angemeldet, mindestens 8 nötig.` });
+    await scheduleCleanup(t);
     return t;
   }
   await set("active", channelId);
@@ -226,7 +228,7 @@ export async function doKickoff(channelId) {
   if (!first) return;
   for (const g of t.groups) {
     const ch = cfg.channels["g" + g.name], role = cfg.roles.groups?.[g.name];
-    if (ch) await sendMessage(ch, { content: `${role ? `<@&${role}> ` : ""}⚽ **Anpfiff! Spieltag ${t.round}** läuft – meldet eure Ergebnisse ${cfg.channels["r" + g.name] ? `in <#${cfg.channels["r" + g.name]}>` : "über den Button im Spielplan"}.`, allowed_mentions: { roles: role ? [role] : [] } });
+    if (ch) await sendMessage(ch, V.freigabePost(t, g, t.round, role, cfg.channels["r" + g.name]));
   }
 }
 
@@ -348,7 +350,7 @@ async function handleEvents(t, events) {
       for (const g of t.groups) {
         const ch = cfg.channels["g" + g.name], role = cfg.roles.groups?.[g.name];
         await refreshGroupPlan(t, g.name);
-        if (ch && t.matches.some((m) => m.group === g.name && m.round === e.round)) await sendMessage(ch, { content: `${role ? `<@&${role}> ` : ""}⚽ **Spieltag ${e.round}** beginnt!`, allowed_mentions: { roles: role ? [role] : [] } });
+        if (ch && t.matches.some((m) => m.group === g.name && m.round === e.round)) await sendMessage(ch, V.freigabePost(t, g, e.round, role, cfg.channels["r" + g.name]));
       }
     }
     if (e.type === "ko-start") await startKOSideEffects(t, cfg);
@@ -396,6 +398,10 @@ async function finishCup(t, cfg) {
     if (clubs[t.champion]) { clubs[t.champion].titles = (clubs[t.champion].titles || 0) + 1; titleNo = clubs[t.champion].titles; }
   }, { initial: {} });
   await set("active", null);
+  await scheduleCleanup(t);
+  const TR = await import("./trophies.mjs");
+  await TR.recordCup(t);
+  await TR.refreshTrophyPanel();
   const f = t.matches.find((m) => m.final && m.round === t.koRound);
   const finalLine = `${f.home} ${f.h}:${f.a}${f.pen ? ` (${f.pen[0]}:${f.pen[1]} i.E.)` : ""} ${f.away}`;
   await sendMessage(t.channelId, { content: `🏆 **Das Turnier ist beendet!** Glückwunsch an ${flagOf(t.champion)} **${V.esc(t.champion)}**!${cfg.channels.hof ? ` Das Siegerbild steht in <#${cfg.channels.hof}>.` : ""}` });
@@ -435,6 +441,7 @@ export async function cancelTournament(channelId) {
   await enqueue(ops);
   if ((await get("active")) === channelId) await set("active", null);
   await refreshSignup(t);
+  await scheduleCleanup(t);
   return t;
 }
 
