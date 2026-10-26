@@ -279,6 +279,25 @@ async function admin(i, context, cfg) {
       return `🎮 **EA-Daten fürs TOTT · ${t.name}**${EAF.eaEnabled() ? "" : "\n⛔ Das TOTT ist ausgeschaltet (EA_AUTO=0)."}\n${await EAF.eaStatus(t)}`.slice(0, 1990);
     });
   }
+  if (sub.name === "rollen-check") {
+    return background(i, context, async () => {
+      const { listMembers } = await import("../lib/discord.mjs");
+      const M = await import("../lib/maintenance.mjs");
+      const members = await listMembers();
+      if (!members) return "❌ Ich kann die Mitgliederliste nicht lesen. Im Discord Developer Portal unter *Bot* den **Server Members Intent** einschalten – ohne den kann ich fehlende Rollen weder erkennen noch nachholen.";
+      const r = await M.cupRoleDiff(members, { includePending: true });
+      if (!r) return "Gerade läuft kein Cup mit Gruppen- oder K.-o.-Phase.";
+      const q = (await get("rolequeue")) || [];
+      const head = `🔎 **Rollen-Check · ${r.t.name}**\n📥 Warteschlange: **${q.length}** offene Rollen-Änderungen${q.length ? ` (nächster Versuch <t:${Math.ceil(Math.min(...q.map((o) => o.nextAt || Date.now())) / 1000)}:R>)` : ""}`;
+      if (!r.missing.length) return `${head}\n✅ Alle Teilnehmer haben genau die richtigen Turnier-Rollen.`;
+      const lines = r.missing.slice(0, 25).map((x) => x.gone
+        ? `• <@${x.u}> (${V.esc(x.club || "?")}) – **nicht mehr auf dem Server**`
+        : `• <@${x.u}> (${V.esc(x.club || "?")})${x.add.length ? ` fehlt: ${x.add.map((id) => `<@&${id}>`).join(" ")}` : ""}${x.rem.length ? ` zu viel: ${x.rem.map((id) => `<@&${id}>`).join(" ")}` : ""}${x.pending ? " ⏳" : ""}`);
+      await enqueue(r.ops.map((o) => ({ ...o, why: "Rollen-Check" })));
+      await processQueue(8000);
+      return `${head}\n⚠️ **${r.missing.length} Abweichungen** – ich korrigiere sie jetzt:\n${lines.join("\n")}${r.missing.length > 25 ? `\n… und ${r.missing.length - 25} weitere` : ""}\n-# ⏳ = war schon in der Warteschlange. Führ den Check in 1–2 Minuten nochmal aus. Bleibt jemand übrig, steht die Bot-Rolle wahrscheinlich unter dieser Rolle (Servereinstellungen → Rollen → Bot-Rolle nach oben ziehen).`.slice(0, 1990);
+    });
+  }
   if (sub.name === "willkommen-test") {
     if (!cfg.channels.welcome) return eph("Der Willkommens-Kanal ist noch nicht verknüpft: `/cl-einrichten kanal typ: Willkommen`.");
     return background(i, context, async () => {

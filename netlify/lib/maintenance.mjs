@@ -89,9 +89,15 @@ export async function welcomeNewMembers(members) {
  * haben sollte, mit dem, was er wirklich hat – und korrigiert Abweichungen (z. B. wenn Discord eine Vergabe abgelehnt hat).
  */
 export async function reconcileCupRoles(members) {
-  if (!members) return;
+  const r = await cupRoleDiff(members);
+  if (r?.ops?.length) await enqueue(r.ops);
+}
+
+/** Soll/Ist-Vergleich der Turnier-Rollen. Rückgabe: { t, ops, missing: [{ u, club, add, rem }] } oder null */
+export async function cupRoleDiff(members, { includePending = false } = {}) {
+  if (!members) return null;
   const t = await activeTournament();
-  if (!t || !T.ACTIVE.includes(t.status)) return;
+  if (!t || !T.ACTIVE.includes(t.status)) return null;
   const cfg = await getConfig();
   const groupRoles = cfg.roles.groups || {}, roundRoles = cfg.roles.rounds || {};
   const managed = new Set([...Object.values(groupRoles), ...Object.values(roundRoles), cfg.roles.koPhase].filter(Boolean));
@@ -105,13 +111,16 @@ export async function reconcileCupRoles(members) {
     for (const m of T.currentMatches(t)) for (const c of [m.home, m.away]) { wish(c, roundRoles[T.koRoleOf(t, c)]); wish(c, cfg.roles.koPhase); }
   }
   const byId = new Map(members.map((m) => [m.user.id, m]));
-  const ops = [];
+  const clubOf = new Map(Object.entries(t.members || {}).flatMap(([c, us]) => us.map((u) => [u, c])));
+  const ops = [], missing = [];
   for (const [u, roles] of want) {
     const m = byId.get(u);
-    if (!m || pending.has(u)) continue;
+    if (!m) { missing.push({ u, club: clubOf.get(u), gone: true, add: [], rem: [] }); continue; }
     const add = [...roles].filter((r) => !m.roles.includes(r));
     const rem = m.roles.filter((r) => managed.has(r) && !roles.has(r));
-    if (add.length || rem.length) ops.push({ u, add, rem, why: "Turnier-Rollen abgeglichen" });
+    if (!add.length && !rem.length) continue;
+    missing.push({ u, club: clubOf.get(u), add, rem, pending: pending.has(u) });
+    if (includePending || !pending.has(u)) ops.push({ u, add, rem, why: "Turnier-Rollen abgeglichen" });
   }
-  await enqueue(ops);
+  return { t, ops, missing, queue: pending.size };
 }

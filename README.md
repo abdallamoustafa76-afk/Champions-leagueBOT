@@ -222,6 +222,7 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
 | `/cl-einrichten rechte` | Nur die Rechte aller verknüpften Kanäle neu setzen |
+| `/cl-admin rollen-check` | Prüfen, ob alle Cup-Teilnehmer die richtigen Gruppen-/KO-Rollen haben, und korrigieren |
 | `/cl-admin willkommen-test` | Willkommensnachricht testweise für dich selbst posten |
 | `/cl-bewerbung öffnen · schließen` | Staff-Bewerbungen öffnen/schließen (nur Server-Admins) |
 | `/cl-admin ea-verknüpfen verein [ea_id]` | EA-Club neu suchen oder ID direkt eintragen |

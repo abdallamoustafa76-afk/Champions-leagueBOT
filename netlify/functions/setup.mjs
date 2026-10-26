@@ -86,6 +86,7 @@ const COMMANDS = [
       ] },
       { type: 1, name: "ea-status", description: "TOTT: Zeigen, welche Mannschaften mit EA verknüpft sind und wie viele Daten gesammelt wurden" },
       { type: 1, name: "tott", description: "TOTT des letzten Turniers sofort (neu) posten" },
+      { type: 1, name: "rollen-check", description: "Prüfen, ob alle Cup-Teilnehmer die richtigen Gruppen-/KO-Rollen haben, und korrigieren" },
       { type: 1, name: "willkommen-test", description: "Willkommensnachricht testweise für dich selbst posten" },
       { type: 1, name: "verein-freigeben", description: "Einen Verein freigeben (z. B. bei Streit)", options: [
         { type: 3, name: "verein", description: "Vereinsname genau wie in der Übersicht", required: true },
