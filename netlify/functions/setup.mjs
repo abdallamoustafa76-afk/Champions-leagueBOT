@@ -13,6 +13,7 @@ const COMMANDS = [
         { type: 5, name: "fehlende_erstellen", description: "Fehlende Kanäle automatisch anlegen (Standard: ja)" },
         { type: 5, name: "rechte_setzen", description: "Rechte der Kanäle automatisch setzen (Standard: ja)" },
       ] },
+      { type: 1, name: "schrift", description: "Alle Kanalnamen des Servers in die fette Schrift umstellen (𝐁𝐞𝐢𝐬𝐩𝐢𝐞𝐥)" },
       { type: 1, name: "rechte", description: "Nur die Rechte aller verknüpften Kanäle neu setzen (Wochenplan bleibt unverändert)" },
       { type: 1, name: "kanal", description: "Einen Kanal verknüpfen", options: [
         { type: 3, name: "typ", description: "Welcher Kanal?", required: true, choices: Object.entries(BASE_CHANNEL_TYPES).map(([value, name]) => ({ name, value })) },
@@ -86,6 +87,11 @@ const COMMANDS = [
       ] },
       { type: 1, name: "ea-status", description: "TOTT: Zeigen, welche Mannschaften mit EA verknüpft sind und wie viele Daten gesammelt wurden" },
       { type: 1, name: "tott", description: "TOTT des letzten Turniers sofort (neu) posten" },
+      { type: 1, name: "coins", description: "Coins in eine Vereinskasse geben (+) oder abziehen (−)", options: [
+        { type: 3, name: "verein", description: "Vereinsname genau wie in der Übersicht", required: true },
+        { type: 4, name: "betrag", description: "z. B. 50 oder -50", required: true, min_value: -100000, max_value: 100000 },
+        { type: 3, name: "grund", description: "Grund (steht in den Buchungen)", required: false, max_length: 100 },
+      ] },
       { type: 1, name: "testcup-start", description: "Test-Cup allein testen: deine Mannschaft + Test-Teams, ohne Statistik", options: [
         { type: 4, name: "teams", description: "Anzahl Teams (8 = mit Halbfinale, 16 = mit Viertelfinale)", required: false, choices: [{ name: "8 Teams", value: 8 }, { name: "16 Teams", value: 16 }] },
       ] },

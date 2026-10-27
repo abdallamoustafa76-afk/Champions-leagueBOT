@@ -8,7 +8,24 @@ const G = () => process.env.DISCORD_GUILD_ID;
 const P = { VIEW: 1n << 10n, SEND: 1n << 11n, EMBED: 1n << 14n, FILES: 1n << 15n, HISTORY: 1n << 16n };
 const bits = (...xs) => xs.reduce((a, b) => a | b, 0n).toString();
 
-const fancy = (s) => [...s].map((ch) => { const c = ch.charCodeAt(0); return c >= 65 && c <= 90 ? String.fromCodePoint(0x1d4d0 + c - 65) : c >= 97 && c <= 122 ? String.fromCodePoint(0x1d4ea + c - 97) : ch; }).join("");
+/**
+ * Text in die fette Server-Schrift umwandeln (𝐁𝐞𝐢𝐬𝐩𝐢𝐞𝐥). Funktioniert auch mit Namen, die schon in einer
+ * anderen Zier-Schrift stehen (z. B. 𝓢𝓬𝓱𝓻𝓮𝓲𝓫𝓼𝓬𝓱𝓻𝓲𝓯𝓽). Umlaute gibt es in dieser Schrift nicht → ae, oe, ue, ss.
+ */
+export function toBold(s) {
+  const UML = { "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss" };
+  return [...String(s)].map((ch) => {
+    const plain = UML[ch] ?? (ch.codePointAt(0) > 0x1d000 ? ch.normalize("NFKC") : ch);
+    return [...plain].map((x) => {
+      const c = x.charCodeAt(0);
+      if (c >= 65 && c <= 90) return String.fromCodePoint(0x1d400 + c - 65);
+      if (c >= 97 && c <= 122) return String.fromCodePoint(0x1d41a + c - 97);
+      if (c >= 48 && c <= 57) return String.fromCodePoint(0x1d7ce + c - 48);
+      return x;
+    }).join("");
+  }).join("");
+}
+const fancy = toBold;
 
 /** Kanal-Plan: Schlüssel, Name beim Anlegen, Kategorie, Rechte-Profil */
 const PLAN = [
@@ -22,6 +39,7 @@ const PLAN = [
   ...DAYS.map((d, i) => ({ key: "day" + (i + 1), name: "🗓️・" + fancy(d), cat: "cl", prof: "members", day: i + 1 })),
   { key: "live", name: "📺・" + fancy("Live-Spielplan"), cat: "cl", prof: "members" },
   { key: "hof", name: "🏆・" + fancy("Hall-of-Fame"), cat: "cl", prof: "members" },
+  { key: "shop", name: "🛒・" + fancy("Shop"), cat: "cl", prof: "members" },
   { key: "tott", name: "⭐・" + fancy("TOTT"), cat: "cl", prof: "members" },
   { key: "trophy", name: "🏅・" + fancy("Trophaeenhalle"), cat: "cl", prof: "members" },
   { key: "ban", name: "🚫・" + fancy("Sperrliste"), cat: "cl", prof: "members" },
@@ -48,7 +66,7 @@ export function detectKey(rawName) {
   if (n.includes("kophase")) return "ko";
   const day = DAYS.findIndex((d) => n === d.toLowerCase());
   if (day >= 0) return "day" + (day + 1);
-  const map = [["staffbewerbung", "bewerbung"], ["bewerbung", "bewerbung"], ["support", "support"], ["teamofthetournament", "tott"], ["tott", "tott"], ["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
+  const map = [["feedback", "feedback"], ["vereinskasse", "shop"], ["shop", "shop"], ["staffbewerbung", "bewerbung"], ["bewerbung", "bewerbung"], ["support", "support"], ["teamofthetournament", "tott"], ["tott", "tott"], ["willkommen", "welcome"], ["rollenauswahl", "roles"], ["benachrichtigung", "notify"], ["regelwerk", "rules"], ["registrieren", "reg"], ["meinemannschaft", "team"], ["mannschaftsuebersicht", "over"], ["livespielplan", "live"], ["halloffame", "hof"], ["trophaeen", "trophy"], ["trophy", "trophy"], ["sperrliste", "ban"], ["turnierleitung", "log"]];
   for (const [kw, key] of map) if (n.includes(kw)) return key;
   if (n === "regeln") return "rules";
   if (n === "admin") return "admin";
@@ -125,6 +143,17 @@ export async function setupAll({ create = true, perms = true, kickoff = "20:00" 
   return { roles, found, missing: create ? missing : [], perms, total: jobs.length };
 }
 
+/** Alle Kanalnamen des Servers in die fette Schrift umstellen (Kategorien und Ticket-Kanäle bleiben) */
+export async function setupRename() {
+  const all = (await discord(`/guilds/${G()}/channels`)) || [];
+  const jobs = all
+    .filter((c) => [0, 2, 5, 13, 15].includes(c.type) && !/^ticket-/i.test(c.name))
+    .map((c) => ({ k: "rename", ch: c.id, name: toBold(c.name), old: c.name }))
+    .filter((j) => j.name !== j.old);
+  await mutate("setupjobs", (q) => { q.list = [...(q.list || []), ...jobs]; q.cats ||= {}; q.done = q.done || 0; q.total = (q.total || 0) + jobs.length; }, { initial: {} });
+  return jobs.length;
+}
+
 /** Nur die Rechte aller verknüpften Kanäle neu setzen (ohne Kanäle anzulegen oder den Wochenplan zu ändern) */
 export async function setupPerms() {
   const cfg = await getConfig();
@@ -167,9 +196,11 @@ export async function processSetupJobs(budgetMs = 8000) {
       }
     }
     if (job.k === "zeit") await setDay(job.day, job.ch, job.kickoff);
+    if (job.k === "rename") ok = !!(await discord(`/channels/${job.ch}`, "PATCH", { name: job.name }, { reason: "Schrift vereinheitlicht" }));
     if (job.k === "panels") {
       await refreshRulesPanel(); await refreshRolesPanel(); await refreshRegPanel(); await refreshTeamPanel(); await refreshOverview(); await refreshBanPanel();
       { const S = await import("./support.mjs"); await S.refreshTicketPanel(); await S.refreshApplyPanel(); }
+      await (await import("./shop.mjs")).refreshShopPanel();
       await (await import("./trophies.mjs")).refreshTrophyPanel();
     }
     await mutate("setupjobs", (x) => {
@@ -214,7 +245,7 @@ export async function resetBot(scope = "setup") {
   const cfg = await getConfig();
   const panels = (await get("panels")) || {};
   const ch = cfg.channels || {};
-  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], [ch.trophy, panels.trophy], [ch.support, panels.ticket], [ch.bewerbung, panels.apply], ...(panels.over || []).map((id) => [ch.over, id])];
+  const msgs = [[ch.reg, panels.reg], [ch.team, panels.team], [ch.rules, panels.rules], [ch.roles, panels.roles], [ch.ban, panels.ban], [ch.trophy, panels.trophy], [ch.support, panels.ticket], [ch.bewerbung, panels.apply], [ch.shop, panels.shop], ...(panels.over || []).map((id) => [ch.over, id])];
   let deleted = 0;
   for (const [c, id] of msgs) if (c && id && (await deleteMessage(c, id))) deleted++;
   for (const k of ["config", "panels", "zeitplan", "setupjobs"]) await del(k);

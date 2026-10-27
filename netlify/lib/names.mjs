@@ -13,8 +13,8 @@ export function baseNameOf(member, user) {
 }
 
 /** Spitzname bauen (max. 32 Zeichen, Name wird bei Bedarf gekürzt) */
-export function nickFor(base, role, club) {
-  const tail = ` ${role === "co" ? "CO-VM" : "VM"} | ${shortClub(club)}`;
+export function nickFor(base, role, club, badge = "") {
+  const tail = ` ${role === "co" ? "CO-VM" : "VM"} | ${shortClub(club)}${badge ? ` ${badge}` : ""}`;
   const room = 32 - tail.length;
   const name = base.length > room ? base.slice(0, Math.max(1, room - 1)) + "…" : base;
   return (name + tail).slice(0, 32);

@@ -1,4 +1,4 @@
-# ⭐ Champions League Bot 2.2
+# ⭐ Champions League Bot 2.3
 
 Discord-Bot für tägliche Champions-League-Cups: 128 Vereine zum Übernehmen, automatische Anmeldelisten pro Wochentag, Formate von 8 bis 32 Mannschaften, Check-in in Gruppenkanälen, Live-Spielplan, K.-o.-Phase mit Runden-Rollen und Siegerbild in der Hall of Fame. Läuft komplett auf Netlify, Einrichtung nur im Browser.
 
@@ -205,6 +205,15 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 - Ablauf wie echt: `/cl-admin anmeldeschluss` → im Gruppenkanal einchecken → `/cl-admin checkin-ende` → eigene Spiele melden (der Test-Gegner bestätigt nach 2 Min. automatisch) → K.-o. → Finale.
 - Keine Statistik, keine Trophäen, kein TOTT, Siegerbild nur im Test-Kanal.
 
+## Vereinskasse & Shop
+
+- Jeder Verein hat eine **Kasse** mit Coins 🪙. Sie gehört der **Mannschaft**, nicht dem Spieler: Wird der Verein frei (verlassen, gelöscht oder 7-Tage-Regel), bleiben Coins und Gutscheine im Tresor – wer den Verein danach übernimmt, bekommt die Kasse. Freie Vereine mit Coins stehen in der Rangliste mit „frei – zu übernehmen“.
+- **Gutschrift nach jedem Cup** (nicht bei Test-Cups), mit Übersicht im Turnierkanal: Teilnahme +20, Sieg +10, Remis +5, Niederlage −5, Tor +2, Zu null +5, Gruppensieger +20, Halbfinale erreicht +50, Finale erreicht +100, Platz 3 +30. Kampflose Spiele zählen nicht. Die Kasse fällt nie unter 0.
+- **Shop** (Kanal 🛒 Shop, kaufen darf nur der Manager): 📏 Großer IV 1.750 (1 IV bis 1,90 m im nächsten Cup), 🛡️ Urlaubsschutz 1.500 (7-Tage-Regel pausiert 7 Tage), 🟣 Große Verstärkung 750 (ganzes Team darf im nächsten Cup lila Verstärkung benutzen), 👑 König-Abzeichen 300 (hinter dem Spitznamen).
+- Großer IV und Große Verstärkung werden beim Check-in-Ende automatisch eingelöst und in den Freigaben für den Gegner angezeigt.
+- Im Shop steht außerdem: Coins sammeln und beim **Cash Cup** einlösen, Coins gehören der Mannschaft, Ideen in #Feedback (Kanal mit `/cl-einrichten kanal typ: Feedback` verknüpfen, dann wird er verlinkt).
+- `/cl-admin coins verein betrag [grund]` gibt oder zieht Coins ab (wird protokolliert). Preise und Beträge oben in `netlify/lib/shop.mjs`.
+
 ## Sperrliste
 
 - Im Kanal 🚫 Sperrliste steht ein Post mit Gründen, Regeln und allen aktuell gesperrten Personen – er aktualisiert sich automatisch.
@@ -229,6 +238,8 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
 | `/cl-einrichten rechte` | Nur die Rechte aller verknüpften Kanäle neu setzen |
+| `/cl-einrichten schrift` | Alle Kanalnamen des Servers in die fette Schrift umstellen |
+| `/cl-admin coins verein betrag [grund]` | Coins geben oder abziehen |
 | `/cl-admin testcup-start [teams]` | Test-Cup allein testen: deine Mannschaft + Test-Teams, ohne Statistik |
 | `/cl-admin testcup-weiter` | Spiele zwischen Test-Teams sofort ausspielen |
 | `/cl-admin rollen-check` | Prüfen, ob alle Cup-Teilnehmer die richtigen Gruppen-/KO-Rollen haben, und korrigieren |

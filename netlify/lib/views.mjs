@@ -19,6 +19,12 @@ const btn = (label, custom_id, style = 2, extra = {}) => ({ type: 2, style, labe
 const row = (...components) => ({ type: 1, components });
 const ping = (ids) => ids.map((id) => `<@${id}>`).join(" ");
 export const teamLine = (c) => `${flagOf(c)} **${esc(c)}**`;
+/** Hinweis in Freigaben: Team hat im Shop den „Großen IV“ eingelöst */
+export const bigIVNote = (t, clubs) => {
+  const iv = clubs.filter((x) => t.bigIV?.includes(x)), bo = clubs.filter((x) => t.boost?.includes(x));
+  return (iv.length ? `\n-# 📏 Großer IV: ${iv.map((x) => esc(x)).join(" und ")} ${iv.length === 1 ? "darf" : "dürfen"} je 1 IV bis **1,90 m** einsetzen` : "")
+    + (bo.length ? `\n-# 🟣 Große Verstärkung: ${bo.map((x) => esc(x)).join(" und ")} ${bo.length === 1 ? "darf" : "dürfen"} mit dem ganzen Team **lila Verstärkung** benutzen` : "");
+};
 const pad = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
 
 // ---------- Team registrieren ----------
@@ -79,7 +85,9 @@ export function teamPanel() {
   };
 }
 
-export function teamDetail(c, data, role, todayDays) {
+export function teamDetail(c, data, role, todayDaysRaw) {
+  const protectedNow = todayDaysRaw < 0 || data.protectUntil > Date.now();
+  const todayDays = Math.max(0, todayDaysRaw);
   const left = Math.max(0, 7 - todayDays);
   const bar = "🟩".repeat(Math.min(7, todayDays)).replace(/🟩/g, todayDays >= 5 ? "🟨" : "🟩") + "⬛".repeat(left);
   return {
@@ -92,9 +100,10 @@ export function teamDetail(c, data, role, todayDays) {
         { name: "Manager", value: `<@${data.manager}>`, inline: true },
         { name: "Co-VM", value: data.co ? `<@${data.co}>` : "–", inline: true },
         { name: "EA-Club", value: `${esc(data.ea || "–")}\n${data.eaId ? "-# ✅ mit EA verknüpft" : data.eaLookup?.ok === false && !data.eaLookup?.err ? "-# ⚠️ bei EA nicht gefunden – Namen prüfen" : "-# ⏳ noch nicht verknüpft"}`, inline: true },
-        { name: "Aktivität", value: `${todayDays === 0 ? "**Aktiv** · heute gespielt" : `${todayDays >= 5 ? "**Achtung**" : "**Aktiv**"} · zuletzt gespielt vor ${todayDays} ${todayDays === 1 ? "Tag" : "Tagen"}`}\n${bar}\nNoch ${left} ${left === 1 ? "Tag" : "Tage"} bis zum Reset`, inline: false },
+        { name: "Aktivität", value: protectedNow ? `🛡️ **Urlaubsschutz** bis <t:${Math.floor(data.protectUntil / 1000)}:f> – die 7-Tage-Regel pausiert.` : `${todayDays === 0 ? "**Aktiv** · heute gespielt" : `${todayDays >= 5 ? "**Achtung**" : "**Aktiv**"} · zuletzt gespielt vor ${todayDays} ${todayDays === 1 ? "Tag" : "Tagen"}`}\n${bar}\nNoch ${left} ${left === 1 ? "Tag" : "Tage"} bis zum Reset`, inline: false },
         { name: "Cups", value: String(data.cups ?? 0), inline: true },
         { name: "Titel", value: String(data.titles ?? 0), inline: true },
+        { name: "💰 Vereinskasse", value: `**${data.coins || 0}** 🪙${data.bigIV ? ` · 📏 ${data.bigIV}× Großer IV` : ""}${data.boost ? ` · 🟣 ${data.boost}× Verstärkung` : ""}`, inline: true },
       ],
     }],
     components: role === "manager"
@@ -342,7 +351,7 @@ export function livePlan(t) {
 // ---------- K.-o.-Phase ----------
 export function koRoundPost(t, members, roleIds, resultChannel) {
   const cur = currentMatches(t).sort((a, b) => a.slot - b.slot);
-  const pair = (m) => `${teamLine(m.home)} vs ${teamLine(m.away)}\n${ping([...(members[m.home] || []), ...(members[m.away] || [])])}`;
+  const pair = (m) => `${teamLine(m.home)} vs ${teamLine(m.away)}${bigIVNote(t, [m.home, m.away])}\n${ping([...(members[m.home] || []), ...(members[m.away] || [])])}`;
   const fin = cur.find((m) => m.final), p3 = cur.find((m) => m.p3);
   const name = koRoundName(t);
   const roles = fin ? [roleIds["Finale"], p3 ? roleIds["Spiel um Platz 3"] : null] : [roleIds[name]];
@@ -589,7 +598,7 @@ export function freigabePost(t, g, round, roleId, resultCh) {
   const mgr = (c) => (isFreilos(c) ? "" : t.members?.[c]?.[0] ? ` <@${t.members[c][0]}>` : "");
   const pairs = ms.map((m) => {
     const free = isFreilos(m.home) || isFreilos(m.away);
-    return `${flagOf(m.home)} **${esc(m.home)}**${mgr(m.home)}  vs  **${esc(m.away)}**${mgr(m.away)} ${flagOf(m.away)}${free ? "\n-# 🎟️ Freilos – wird automatisch 3:0 gewertet" : ""}`;
+    return `${flagOf(m.home)} **${esc(m.home)}**${mgr(m.home)}  vs  **${esc(m.away)}**${mgr(m.away)} ${flagOf(m.away)}${free ? "\n-# 🎟️ Freilos – wird automatisch 3:0 gewertet" : ""}${bigIVNote(t, [m.home, m.away])}`;
   });
   const playing = new Set(ms.flatMap((m) => [m.home, m.away]));
   const bye = g.teams.filter((c) => !playing.has(c) && !isFreilos(c));

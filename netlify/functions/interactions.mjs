@@ -12,6 +12,7 @@ import * as AS from "../lib/autosetup.mjs";
 import * as EAF from "../lib/eaflow.mjs";
 import * as SUP from "../lib/support.mjs";
 import * as AU from "../lib/audit.mjs";
+import * as SH from "../lib/shop.mjs";
 import { parseVienna, parseTime, toMinutes, nextOccurrence, dateKey, shortDate, todayKey, daysBetween, minutesToHHMM } from "../lib/time.mjs";
 
 // ---------- Hilfen ----------
@@ -82,6 +83,7 @@ export const config = { path: "/api/interactions" };
 /** Nach dem Verknüpfen eines Kanals das passende Panel dort sofort (neu) posten */
 async function refreshLinkedPanel(key) {
   if (key === "support") return SUP.refreshTicketPanel();
+  if (key === "shop" || key === "feedback") return SH.refreshShopPanel();
   if (key === "bewerbung") return SUP.refreshApplyPanel();
   const map = { rules: F.refreshRulesPanel, roles: F.refreshRolesPanel, reg: F.refreshRegPanel, team: F.refreshTeamPanel, over: F.refreshOverview, ban: B.refreshBanPanel };
   if (map[key]) return map[key]();
@@ -136,6 +138,15 @@ async function setup(i, context, cfg) {
     await mutate("config", (c) => { c.channels = c.channels || {}; c.channels[o.typ] = ch; }, { initial: { channels: {}, roles: { groups: {}, rounds: {} } } });
     later(context, () => refreshLinkedPanel(o.typ));
     return eph(`✅ **${CHANNEL_TYPES[o.typ]}** → <#${ch}>`);
+  }
+  if (sub.name === "schrift") {
+    return background(i, context, async () => {
+      const n = await AS.setupRename();
+      if (!n) return "✅ Alle Kanäle stehen schon in der fetten Schrift.";
+      await AS.processSetupJobs(14000);
+      const pr = await AS.setupProgress();
+      return `🔤 **${n} Kanäle werden umbenannt** (z. B. 𝐊𝐎-𝐄𝐫𝐠𝐞𝐛𝐧𝐢𝐬𝐬𝐞).\n${pr?.left ? `⏳ Noch ${pr.left} offen – läuft im Hintergrund weiter (etwa ${Math.ceil(pr.left / 8)} Min.).` : "✅ Fertig."}\n-# Verknüpfungen bleiben erhalten. Kategorien und Ticket-Kanäle werden nicht angefasst. Umlaute werden zu ae/oe/ue.`;
+    });
   }
   if (sub.name === "rechte") {
     return background(i, context, async () => {
@@ -193,7 +204,7 @@ async function setup(i, context, cfg) {
     });
   }
   if (sub.name === "panels") {
-    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); await (await import("../lib/trophies.mjs")).refreshTrophyPanel(); await SUP.refreshTicketPanel(); await SUP.refreshApplyPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Trophäenhalle, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht, Sperrliste, Support und Staff-Bewerbung gepostet bzw. aktualisiert."; });
+    return background(i, context, async () => { await F.refreshRulesPanel(); await F.refreshRolesPanel(); await F.refreshRegPanel(); await F.refreshTeamPanel(); await F.refreshOverview(); await B.refreshBanPanel(); await (await import("../lib/trophies.mjs")).refreshTrophyPanel(); await SUP.refreshTicketPanel(); await SUP.refreshApplyPanel(); await SH.refreshShopPanel(); return "✅ Panels in Regelwerk, Rollenauswahl, Trophäenhalle, Team-registrieren, Meine-Mannschaft, Mannschaftsübersicht, Sperrliste, Support, Staff-Bewerbung und Shop gepostet bzw. aktualisiert."; });
   }
   if (sub.name === "status") return background(i, context, async () => {
     // Prüfen, ob die verknüpften Kanäle noch existieren (gelöschte Kanäle erscheinen in Discord als „#unbekannt“)
@@ -302,6 +313,14 @@ async function admin(i, context, cfg) {
       return `🎮 **EA-Daten fürs TOTT · ${t.name}**${EAF.eaEnabled() ? "" : "\n⛔ Das TOTT ist ausgeschaltet (EA_AUTO=0)."}\n${await EAF.eaStatus(t)}`.slice(0, 1990);
     });
   }
+  if (sub.name === "coins") {
+    return background(i, context, async () => {
+      const name = CLUBS.find((c) => c.name.toLowerCase() === String(o.verein).trim().toLowerCase())?.name;
+      if (!name) throw new Error("Diesen Verein gibt es nicht. Bitte genau wie in der Übersicht schreiben.");
+      const now = await SH.adminCoins(name, Number(o.betrag), o.grund?.trim() || "");
+      return `💰 ${flagOf(name)} **${V.esc(name)}** ${o.betrag >= 0 ? "+" : ""}${o.betrag} 🪙 → Kasse: **${now}** 🪙`;
+    });
+  }
   if (sub.name === "testcup-start") {
     return background(i, context, async () => {
       const size = Number(o.teams || 8);
@@ -378,6 +397,8 @@ async function component(i, context) {
   const cfg = await getConfig();
   const id = i.data.custom_id, uid = uidOf(i);
 
+  // --- Shop ---
+  if (id.startsWith("shop_")) return shopComponent(i, context, id, uid);
   // --- Support-Tickets ---
   if (id.startsWith("tk_")) return ticketComponent(i, context, cfg, id, uid);
   // --- Staff-Bewerbungen ---
@@ -471,7 +492,7 @@ async function component(i, context) {
     const clubs = await getClubs();
     const mine = F.clubOfUser(clubs, uid);
     if (!mine) return reply(i, { content: hasRole(i, cfg.roles.manager) ? "Du hast noch keine Mannschaft – registriere dich in Team-registrieren." : "Das können nur Mitglieder mit der Rolle **Manager**.", embeds: [], components: [] });
-    const detail = (c, note) => ({ ...V.teamDetail(c.club, c.data, c.role, daysBetween(c.data.lastPlayed || todayKey(), todayKey())), content: note || "" });
+    const detail = (c, note) => ({ ...V.teamDetail(c.club, c.data, c.role, daysBetween(SH.lastActiveKey(c.data, todayKey), todayKey())), content: note || "" });
     if (id === "team_open") return reply(i, detail(mine));
     if (id === "team_ea") return V.eaModal("team_ea_m", "EA-Club ändern", mine.data.ea);
     if (mine.role === "co") {
@@ -497,7 +518,7 @@ async function component(i, context) {
       const coBase = baseNameOf(tm, user);
       const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]?.manager === uid) Object.assign(cl[mine.club], { co: target, coBase, coOrigNick: tm?.nick ?? null }); }, { initial: {} });
       await enqueue([{ u: target, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: `Co-VM von ${mine.club}` }]);
-      later(context, async () => { await setNick(target, nickFor(coBase, "co", mine.club)); await F.refreshOverview(); });
+      later(context, async () => { await setNick(target, nickFor(coBase, "co", mine.club, value[mine.club]?.badge)); await F.refreshOverview(); });
       return reply(i, detail({ ...mine, data: value[mine.club] }, `✅ <@${target}> ist jetzt Co-VM – Rolle Manager vergeben, Rolle Spieler entfernt.`));
     }
     if (id === "team_co_rem") {
@@ -617,8 +638,9 @@ async function modal(i, context) {
     if (result === "vergeben") return reply(i, { content: `${c.name} wurde gerade vergeben – wähl eine andere Mannschaft.`, ...V.regClubs(await getClubs(), c.li) });
     if (result === "schon") return reply(i, { content: "Du hast bereits eine Mannschaft.", components: [] });
     later(context, async () => {
+      await SH.claimTreasury(c.name); // Kasse vom Vorgänger übernehmen
       await setNick(uid, nickFor(baseNameOf(i.member), "manager", c.name));
-      await F.refreshRegPanel(); await F.refreshOverview();
+      await F.refreshRegPanel(); await F.refreshOverview(); await SH.refreshShopPanel();
       if (EAF.eaEnabled()) await EAF.linkEaClub(c.name, { force: true });
     });
     return reply(i, { content: `${c.flag} **Willkommen, Manager von ${V.esc(c.name)}!**\nDeine Mannschaft findest du in ${cfg.channels.team ? `<#${cfg.channels.team}>` : "Meine-Mannschaft"}.`, embeds: [], components: [] });
@@ -658,9 +680,12 @@ async function modal(i, context) {
     const mine = F.clubOfUser(await getClubs(), uid);
     if (!mine) return eph("Du bist keiner Mannschaft zugeordnet.");
     const t0 = await resolveTournament(i);
-    const { value: t, result } = await mutate(tKey(t0.channelId), (t) => T.requestVideo(t, mine.club, VIDEO_LIMIT, VIDEO_WINDOW_MIN, min));
+    const extra = mine.data.extraVideos || 0; // im Shop gekaufte Extra-Videos
+    const { value: t, result } = await mutate(tKey(t0.channelId), (t) => T.requestVideo(t, mine.club, VIDEO_LIMIT + extra, VIDEO_WINDOW_MIN, min));
+    const usedExtra = VIDEO_LIMIT + extra - result.left > VIDEO_LIMIT; // diese Anforderung ging über die normalen hinaus
+    if (usedExtra) await mutate("clubs", (cl) => { if (cl[mine.club]?.extraVideos > 0) cl[mine.club].extraVideos--; }, { initial: {} });
     later(context, () => F.postVideoRequest(t, result.v, result.m));
-    return eph(`✅ Größenvideo bei ${flagOf(result.v.to)} **${V.esc(result.v.to)}** angefordert (${min}. Spielminute). Noch **${result.left}** von ${VIDEO_LIMIT} Anforderungen übrig.`);
+    return eph(`✅ Größenvideo bei ${flagOf(result.v.to)} **${V.esc(result.v.to)}** angefordert (${min}. Spielminute).${usedExtra ? " 📏 Dafür wurde ein **Extra-Größenvideo** aus dem Shop verbraucht." : ""} Noch **${result.left}** Anforderungen übrig.`);
   }
 
   if (id === "team_ea_m") {
@@ -670,7 +695,7 @@ async function modal(i, context) {
     if (!mine) return reply(i, { content: "Du bist keiner Mannschaft zugeordnet.", embeds: [], components: [] });
     const { value } = await mutate("clubs", (cl) => { const x = cl[mine.club]; if (x && x.ea !== ea) Object.assign(x, { ea, eaId: null, eaName: null, eaLookup: null }); }, { initial: {} });
     if (EAF.eaEnabled()) later(context, () => EAF.linkEaClub(mine.club, { force: true }));
-    return reply(i, { ...V.teamDetail(mine.club, value[mine.club], mine.role, daysBetween(value[mine.club].lastPlayed || todayKey(), todayKey())), content: "✅ EA-Club gespeichert. Die Verknüpfung mit EA läuft im Hintergrund – öffne das Fenster gleich nochmal, um den Status zu sehen." });
+    return reply(i, { ...V.teamDetail(mine.club, value[mine.club], mine.role, daysBetween(SH.lastActiveKey(value[mine.club], todayKey), todayKey())), content: "✅ EA-Club gespeichert. Die Verknüpfung mit EA läuft im Hintergrund – öffne das Fenster gleich nochmal, um den Status zu sehen." });
   }
 
   if (id.startsWith("res:")) {
@@ -695,6 +720,30 @@ async function modal(i, context) {
     });
   }
   return eph("Unbekanntes Formular.");
+}
+
+// ---------- Shop ----------
+async function shopComponent(i, context, id, uid) {
+  const mine = F.clubOfUser(await getClubs(), uid);
+  if (id === "shop_me") {
+    if (!mine) return eph("Du gehörst zu keinem Verein – registrier eine Mannschaft oder lass dich als Co-VM eintragen.");
+    return { type: 4, data: { flags: 64, ...SH.balanceView(mine.club, mine.data) } };
+  }
+  if (!mine || mine.role !== "manager") return eph("Im Shop kaufen darf nur der **Manager** eines Vereins.");
+  const coins = mine.data.coins || 0;
+  if (id.startsWith("shop_buy:")) {
+    const item = id.split(":")[1], it = SH.ITEMS[item];
+    if (!it) return eph("Unbekannter Artikel.");
+    if (coins < it.price) return eph(`Dafür reicht eure Kasse nicht: **${coins.toLocaleString("de-DE")}** von **${it.price.toLocaleString("de-DE")}** 🪙.`);
+    if (item === "abzeichen" && mine.data.badge) return eph("Ihr habt das 👑 König-Abzeichen schon.");
+    return { type: 4, data: { flags: 64, content: `${it.emoji} **${it.label}** für **${it.price}** 🪙 kaufen?\n-# ${it.text}\nKasse danach: ${coins - it.price} 🪙`, components: [{ type: 1, components: [{ type: 2, style: 2, label: "Abbrechen", custom_id: "shop_no" }, { type: 2, style: 3, label: "Kaufen", custom_id: `shop_ok:${item}` }] }] } };
+  }
+  if (id === "shop_no") return reply(i, { content: "Abgebrochen.", components: [] });
+  if (id === "shop_ok:abzeichen") return background(i, context, async () => { await SH.buyBadge(mine.club, uid, "👑"); await SH.refreshShopPanel(); return "👑 **König-Abzeichen** gekauft – eure Spitznamen enden jetzt mit 👑."; }, { update: true });
+  if (id === "shop_ok:boost") return background(i, context, async () => { const n = await SH.buyBoost(mine.club, uid); await SH.refreshShopPanel(); return `🟣 **Große Verstärkung** gekauft (${n}× auf Lager). Sie wird beim nächsten Cup, in dem ihr eincheckt, automatisch eingelöst: Das ganze Team darf dann **lila Verstärkung** benutzen.`; }, { update: true });
+  if (id === "shop_ok:iv") return background(i, context, async () => { const n = await SH.buyIV(mine.club, uid); await SH.refreshShopPanel(); return `📏 **Großer IV** gekauft (${n}× auf Lager). Er wird beim nächsten Cup, in dem ihr eincheckt, automatisch eingelöst: 1 Innenverteidiger darf dann bis **1,90 m** groß sein.`; }, { update: true });
+  if (id === "shop_ok:urlaub") return background(i, context, async () => { const until = await SH.buyVacation(mine.club, uid); await SH.refreshShopPanel(); return `🛡️ Urlaubsschutz gekauft – die 7-Tage-Regel pausiert bis <t:${Math.floor(until / 1000)}:f>.`; }, { update: true });
+  return eph("Unbekannte Aktion.");
 }
 
 // ---------- Support-Tickets ----------

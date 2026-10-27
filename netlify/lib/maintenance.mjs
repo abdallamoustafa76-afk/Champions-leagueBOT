@@ -51,8 +51,8 @@ export async function dailyInactivity(now = Date.now()) {
   if (!run) return;
   const clubs = await getClubs();
   for (const [name, c] of Object.entries(clubs)) {
-    const last = c.lastPlayed || today;
-    const days = daysBetween(last, today);
+    const { lastActiveKey } = await import("./shop.mjs");
+    const days = daysBetween(lastActiveKey(c, todayKey), today); // Urlaubsschutz verschiebt den Start nach hinten
     const users = [c.manager, c.co].filter(Boolean);
     if (days >= INACTIVE_DAYS) {
       await releaseClub(name, { reason: `${INACTIVE_DAYS} Tage keinen Cup gespielt` });

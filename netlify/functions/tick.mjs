@@ -24,6 +24,7 @@ export default async () => {
   await step("Test-Cup", async () => { const F = await import("../lib/flow.mjs"); const t = await F.activeTournament(); if (t?.test) await F.playVirtualMatches(t.channelId); });
   await step("Rollen-Abgleich", () => syncManagerRoles(members));
   await step("Turnier-Rollen prüfen", () => reconcileCupRoles(members));
+  await step("Vereinsfarben", async () => (await import("../lib/shop.mjs")).syncColorRoles(members));
   await step("Inaktivität", () => dailyInactivity());
   await step("Sperren", () => expireBans());
   await step("Benachrichtigungen löschen", () => runAutoDelete());

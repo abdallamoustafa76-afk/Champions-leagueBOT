@@ -76,21 +76,24 @@ export async function releaseClub(name, { transferToCo = false, reason = "" } = 
       const old = { id: c.manager, orig: c.managerOrigNick ?? null };
       c.manager = c.co; c.managerBase = c.coBase; c.managerOrigNick = c.coOrigNick ?? null;
       c.co = null; c.coBase = null; c.coOrigNick = null;
-      return { transferred: true, old, now: c.manager, base: c.managerBase };
+      return { transferred: true, old, now: c.manager, base: c.managerBase, badge: c.badge };
     }
     delete clubs[name];
-    return { transferred: false, co: c.co, manager: c.manager, managerOrig: c.managerOrigNick ?? null, coOrig: c.coOrigNick ?? null };
+    return { transferred: false, co: c.co, manager: c.manager, managerOrig: c.managerOrigNick ?? null, coOrig: c.coOrigNick ?? null, colorRole: c.colorRole ?? null, data: c };
   });
   if (!result) return null;
   // Spitznamen anpassen bzw. zurücksetzen
   if (result.transferred) {
     await setNick(result.old.id, result.old.orig);
-    if (result.base) await setNick(result.now, nickFor(result.base, "manager", name));
+    if (result.base) await setNick(result.now, nickFor(result.base, "manager", name, result.badge));
   } else {
     if (result.manager) await setNick(result.manager, result.managerOrig);
     if (result.co) await setNick(result.co, result.coOrig);
   }
   if (!result.transferred && result.co) await enqueue([{ u: result.co, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Mannschaft aufgelöst – Co-VM entfernt" }]);
+  if (!result.transferred && result.colorRole) await (await import("./shop.mjs")).deleteColorRole(result.colorRole);
+  if (!result.transferred) await (await import("./shop.mjs")).parkTreasury(name, result.data); // Kasse bleibt beim Verein
+  (await import("./shop.mjs")).refreshShopPanel().catch(() => {});
   await Promise.all([refreshRegPanel(), refreshOverview()]);
   return result;
 }
@@ -201,12 +204,17 @@ export async function refreshGroupCheckin(t, gName) {
 
 export async function doCheckinEnd(channelId) {
   const cfg = await getConfig(), clubs = await getClubs();
-  const { value: t, result } = await mutate(tKey(channelId), (t) => {
+  let { value: t, result } = await mutate(tKey(channelId), (t) => {
     const r = T.finishCheckin(t);
     for (const x of r.replaced) t.members[x.new] = t.members[x.new]?.length ? t.members[x.new] : membersOf(clubs, x.new);
     r.events = T.advance(t);
     return r;
   });
+  // Shop: „Großer IV“ für diesen Cup einlösen
+  try {
+    const r = await (await import("./shop.mjs")).redeemCupItems(t);
+    if (r.bigIV.length || r.boost.length) ({ value: t } = await mutate(tKey(channelId), (x) => { x.bigIV = r.bigIV; x.boost = r.boost; }));
+  } catch (e) { console.error("Großer IV:", e); }
   // Rollen: Nachrücker rein, Nicht-Eingecheckte raus
   const ops = [];
   for (const x of result.replaced) {
@@ -290,6 +298,7 @@ export async function postVideoRequest(t, v, m) {
   const ch = resultChannelOf(cfg, m);
   if (!ch) return;
   const msg = await sendMessage(ch, V.videoPost(v, t.members[v.to] || []));
+  if (t.bigIV?.includes(v.to)) await sendMessage(ch, { content: `📏 Hinweis: **${V.esc(v.to)}** hat für diesen Cup den **Großen IV** aus dem Shop – 1 Innenverteidiger darf bis **1,90 m** groß sein.` });
   if (msg) await mutate(tKey(t.channelId), (x) => { const y = x.videos.find((z) => z.id === v.id); if (y) { y.msg = msg.id; y.ch = ch; } });
 }
 export async function videoSubmitted(t, v) {
@@ -436,6 +445,7 @@ async function finishCup(t, cfg) {
     const TR = await import("./trophies.mjs");
     await TR.recordCup(t);
     await TR.refreshTrophyPanel();
+    try { await (await import("./shop.mjs")).payoutCup(t); await mutate(tKey(t.channelId), (x) => { x.coinsPaid = true; }); } catch (e) { console.error("Vereinskasse:", e); }
   }
   const f = t.matches.find((m) => m.final && m.round === t.koRound);
   const finalLine = `${f.home} ${f.h}:${f.a}${f.pen ? ` (${f.pen[0]}:${f.pen[1]} i.E.)` : ""} ${f.away}`;
