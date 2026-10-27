@@ -46,6 +46,12 @@ const COMMANDS = [
         { type: 3, name: "posten", description: "Uhrzeit, zu der die Liste gepostet wird (Standard: 12:00)" },
         { type: 3, name: "name", description: "Turniername (Standard: Champions League)", max_length: 40 },
       ] },
+      { type: 1, name: "woche", description: "Ab einem Datum jeden Tag Cup: alle 7 Listen sofort posten, danach immer 1 Woche im Voraus", options: [
+        { type: 3, name: "start", description: "Erster Cup-Tag, z. B. 29.10.2026", required: true },
+        { type: 3, name: "anpfiff", description: "Anpfiff jeden Tag (Standard: 20:00)", required: false },
+        { type: 3, name: "posten", description: "Uhrzeit, zu der nach dem Cup die Liste für nächste Woche kommt (Standard: 23:00)", required: false },
+        { type: 3, name: "name", description: "Turniername (Standard: Champions League)", required: false, max_length: 40 },
+      ] },
       { type: 1, name: "anzeigen", description: "Wochenplan anzeigen" },
       { type: 1, name: "entfernen", description: "Tag entfernen", options: [tag] },
       { type: 1, name: "jetzt-posten", description: "Liste für diesen Tag sofort posten (z. B. zum Testen)", options: [tag] },

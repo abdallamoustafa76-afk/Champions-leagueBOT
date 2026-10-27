@@ -239,6 +239,7 @@ Der Bot übernimmt vorhandene Rollen und legt fehlende an, erkennt deine Kanäle
 | `/cl-admin ea-status` | TOTT: EA-Verknüpfung & gesammelte Daten anzeigen |
 | `/cl-admin tott` | TOTT des letzten Turniers sofort posten |
 | `/cl-einrichten rechte` | Nur die Rechte aller verknüpften Kanäle neu setzen |
+| `/cl-zeitplan woche start [anpfiff] [posten] [name]` | Ab einem Datum jeden Tag Cup: alle 7 Listen sofort posten, danach nach jedem Cup die Liste für nächste Woche (Standard 23:00) |
 | `/cl-einrichten schrift` | Alle Kanalnamen des Servers in die fette Schrift umstellen |
 | `/cl-admin coins verein betrag [grund]` | Coins geben oder abziehen |
 | `/cl-admin testcup-start [teams]` | Test-Cup allein testen: deine Mannschaft + Test-Teams, ohne Statistik |

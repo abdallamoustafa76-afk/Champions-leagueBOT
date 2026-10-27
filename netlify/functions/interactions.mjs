@@ -230,13 +230,24 @@ async function schedule(i, context) {
     if (!kickoff) return eph("Anpfiff bitte so angeben: `20:00`");
     if (!post) return eph("Posting-Zeit bitte so angeben: `12:00`");
     if (toMinutes(post) > toMinutes(kickoff) - 62) return eph(`Die Liste muss vor dem Anmeldeschluss (${minutesToHHMM(toMinutes(kickoff) - 60)}) gepostet werden.`);
-    const entry = { channelId: o.kanal, kickoff, post, name: (o.name ?? "Champions League").trim() };
+    const entry = { channelId: o.kanal, kickoff, post, name: (o.name ?? "Champions League").trim(), advance: false };
     await mutate("zeitplan", (p) => { const old = p[o.tag]; p[o.tag] = { ...entry, lastPosted: old?.channelId === o.kanal ? old.lastPosted ?? null : null }; }, { initial: {} });
     return eph(`✅ **${DAYS[o.tag - 1]}:** Liste um ${post} in <#${o.kanal}> · Anmeldeschluss & Auslosung ${minutesToHHMM(toMinutes(kickoff) - 60)} · Check-in-Ende ${minutesToHHMM(toMinutes(kickoff) - 5)} · Anpfiff ${kickoff}`);
   }
   if (sub.name === "anzeigen") {
     const p = (await get("zeitplan")) || {};
-    return eph("🗓️ **Wochenplan** (Wiener Zeit)\n\n" + DAYS.map((d, k) => (p[k + 1] ? `**${d}** → <#${p[k + 1].channelId}> · Liste ${p[k + 1].post} · Anpfiff ${p[k + 1].kickoff}` : `**${d}** → –`)).join("\n"));
+    return eph("🗓️ **Wochenplan** (Wiener Zeit)\n\n" + DAYS.map((d, k) => { const e = p[k + 1]; return e ? `**${d}** → <#${e.channelId}> · Anpfiff ${e.kickoff} · ${e.advance ? `Liste für nächste Woche nach dem Cup ab ${e.post}` : `Liste am selben Tag um ${e.post}`}` : `**${d}** → –`; }).join("\n"));
+  }
+  if (sub.name === "woche") {
+    const m = String(o.start || "").trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!m) return eph("Startdatum bitte so angeben: `29.10.2026`");
+    const kickoff = parseTime(o.anpfiff ?? "20:00"), post = parseTime(o.posten ?? "23:00");
+    if (!kickoff || !post) return eph("Uhrzeiten bitte so angeben: `20:00`");
+    if (toMinutes(post) <= toMinutes(kickoff)) return eph("Die neue Liste muss **nach** dem Anpfiff gepostet werden (z. B. 23:00), sonst kollidiert sie mit dem laufenden Cup.");
+    return background(i, context, async () => {
+      const lines = await F.setupWeek({ startY: Number(m[3]), startMo: Number(m[2]), startD: Number(m[1]), kickoff, post, name: (o.name ?? "Champions League").trim() });
+      return `🗓️ **Woche eingerichtet** – Anpfiff jeden Tag um ${kickoff}\n\n${lines.join("\n")}\n\n🔁 **Ab jetzt automatisch:** Nach jedem Cup wird um **${post}** die Liste für denselben Tag **nächste Woche** gepostet (ist der Cup um ${post} noch nicht vorbei, kommt sie direkt danach).`;
+    });
   }
   if (sub.name === "entfernen") {
     await mutate("zeitplan", (p) => { delete p[o.tag]; }, { initial: {} });

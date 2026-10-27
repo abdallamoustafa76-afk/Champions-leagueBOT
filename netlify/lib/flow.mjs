@@ -148,6 +148,7 @@ export async function runSchedule(now = Date.now()) {
   const plan = (await get("zeitplan")) || {};
   const e = plan[v.weekday];
   if (!e || e.lastPosted === v.dateKey || v.hhmm < e.post) return;
+  if (e.advance) return runAdvance(e, v, now);
   const { result: claimed } = await mutate("zeitplan", (p) => {
     const x = p[v.weekday]; if (!x || x.lastPosted === v.dateKey) return false;
     x.lastPosted = v.dateKey; return true;
@@ -504,6 +505,60 @@ export async function allTournaments() {
 }
 
 export { ROUND_ROLES };
+
+// ---------- Wochen-Vorlauf: Liste für nächste Woche direkt nach dem Cup ----------
+/**
+ * Vorlauf-Modus (/cl-zeitplan woche): Am Cup-Tag um die eingestellte Uhrzeit (z. B. 23:00) wird die Liste
+ * für denselben Wochentag in 7 Tagen gepostet. Gewartet wird, bis der heutige Cup im Kanal fertig und
+ * aufgeräumt ist – sonst würde das Aufräumen die neue Liste gleich wieder löschen.
+ */
+async function runAdvance(e, v, now) {
+  const old = await get(tKey(e.channelId));
+  if (old && T.ACTIVE.includes(old.status)) return; // Cup läuft noch → nächste Minute erneut prüfen
+  if (old) {
+    const pending = ((await get("cleanup")) || []).some((j) => j.tid === `${old.channelId}:${old.createdAt}`);
+    if (pending) return; // Aufräumen steht noch aus → warten
+  }
+  const dt = new Date(Date.UTC(v.y, v.mo - 1, v.d + 7));
+  const y = dt.getUTCFullYear(), mo = dt.getUTCMonth() + 1, d = dt.getUTCDate();
+  const { result: claimed } = await mutate("zeitplan", (p) => {
+    const x = p[v.weekday]; if (!x || x.lastPosted === v.dateKey) return false;
+    x.lastPosted = v.dateKey; return true;
+  }, { initial: {} });
+  if (!claimed) return;
+  await launchTournament({ channelId: e.channelId, name: `${e.name} · ${DAYS[v.weekday - 1]}, ${shortDate(mo, d)}`, day: DAYS[v.weekday - 1], date: shortDate(mo, d), times: timesFromKickoff(viennaAt(y, mo, d, e.kickoff)) }, { replace: true });
+}
+
+/**
+ * Ganze Woche ab einem Startdatum einrichten: für 7 Tage sofort die Listen posten
+ * und alle Wochentage auf den Vorlauf-Modus stellen.
+ */
+export async function setupWeek({ startY, startMo, startD, kickoff, post, name }) {
+  const plan = (await get("zeitplan")) || {};
+  const days = [];
+  for (let k = 0; k < 7; k++) {
+    const dt = new Date(Date.UTC(startY, startMo - 1, startD + k));
+    const y = dt.getUTCFullYear(), mo = dt.getUTCMonth() + 1, d = dt.getUTCDate();
+    const wd = ((dt.getUTCDay() + 6) % 7) + 1;
+    days.push({ y, mo, d, wd, ch: plan[wd]?.channelId });
+  }
+  const missing = days.filter((x) => !x.ch).map((x) => DAYS[x.wd - 1]);
+  if (missing.length) throw new Error(`Für ${missing.join(", ")} ist noch kein Tageskanal verknüpft. Führ dort einmal \`/cl-zeitplan setzen\` aus oder nutze \`/cl-einrichten alles\`.`);
+  // Zuerst alle Tage auf Vorlauf stellen (lastPosted = heute, damit heute nichts doppelt kommt)
+  const today = viennaParts().dateKey;
+  await mutate("zeitplan", (p) => { for (const x of days) p[x.wd] = { ...p[x.wd], channelId: x.ch, kickoff, post, name, advance: true, lastPosted: x.wd === viennaParts().weekday ? today : p[x.wd]?.lastPosted ?? null }; }, { initial: {} });
+  const out = [];
+  for (const x of days) {
+    const ko = viennaAt(x.y, x.mo, x.d, kickoff);
+    const label = `${DAYS[x.wd - 1]}, ${shortDate(x.mo, x.d)}`;
+    try {
+      if (ko - 60 * 60000 < Date.now() + 2 * 60000) throw new Error("Anmeldeschluss schon vorbei");
+      await launchTournament({ channelId: x.ch, name: `${name} · ${label}`, day: DAYS[x.wd - 1], date: shortDate(x.mo, x.d), times: timesFromKickoff(ko) }, { replace: true });
+      out.push(`✅ **${label}** – Liste in <#${x.ch}> gepostet`);
+    } catch (e) { out.push(`⚠️ **${label}** – ${e.message}`); }
+  }
+  return out;
+}
 
 // ---------- Test-Cup (allein testen) ----------
 /**
