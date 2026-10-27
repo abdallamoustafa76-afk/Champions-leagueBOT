@@ -325,6 +325,23 @@ async function admin(i, context, cfg) {
       return `🎮 **EA-Daten fürs TOTT · ${t.name}**${EAF.eaEnabled() ? "" : "\n⛔ Das TOTT ist ausgeschaltet (EA_AUTO=0)."}\n${await EAF.eaStatus(t)}`.slice(0, 1990);
     });
   }
+  if (sub.name === "abmelden") {
+    return background(i, context, async () => {
+      const name = CLUBS.find((c) => c.name.toLowerCase() === String(o.verein).trim().toLowerCase())?.name;
+      if (!name) throw new Error("Diesen Verein gibt es nicht. Bitte genau wie in der Liste schreiben.");
+      const t0 = await get(tKey(i.channel_id));
+      if (!t0) throw new Error("In diesem Kanal gibt es keine Anmeldeliste – führ den Befehl im Kanal mit der Liste aus.");
+      const { value: t } = await mutate(tKey(i.channel_id), (t) => {
+        if (t.status === "anmeldung") return T.unregister(t, name);
+        if (t.status === "checkin" && t.wait?.includes(name)) { t.wait = t.wait.filter((c) => c !== name); t.waitChecked = (t.waitChecked || []).filter((c) => c !== name); return; }
+        throw new Error(t.status === "checkin" ? "Nach der Auslosung kann nur noch die Warteliste bearbeitet werden. Spielt das Team schon mit, lass es nicht einchecken – es wird dann automatisch ersetzt." : "Die Anmeldung ist schon vorbei.");
+      });
+      await F.refreshSignup(t);
+      const users = F.membersOf(await getClubs(), name);
+      if (users.length) await (await import("../lib/notify.mjs")).notify(users, { embeds: [{ color: COLOR, title: `${flagOf(name)} Von der Anmeldung entfernt`, description: `Eure Mannschaft **${name}** wurde von der Turnierleitung aus der Liste für **${t.name}** entfernt.${o.grund ? `\n**Grund:** ${o.grund}` : ""}` }] });
+      return `✅ ${flagOf(name)} **${V.esc(name)}** wurde aus der Liste entfernt${users.length ? " und benachrichtigt" : ""}.`;
+    });
+  }
   if (sub.name === "coins") {
     return background(i, context, async () => {
       const name = CLUBS.find((c) => c.name.toLowerCase() === String(o.verein).trim().toLowerCase())?.name;

@@ -85,6 +85,10 @@ const COMMANDS = [
         { type: 4, name: "gast", description: "Tore Gast", required: true, min_value: 0, max_value: 99 },
         { type: 3, name: "elfmeter", description: "Nur K.-o. bei Unentschieden, z. B. 4:3" },
       ] },
+      { type: 1, name: "abmelden", description: "Eine Mannschaft aus der Anmeldeliste dieses Kanals entfernen", options: [
+        { type: 3, name: "verein", description: "Vereinsname genau wie in der Liste", required: true },
+        { type: 3, name: "grund", description: "Grund (bekommt das Team als Benachrichtigung)", required: false, max_length: 200 },
+      ] },
       { type: 1, name: "freilos-hinzufügen", description: "Ein Freilos in die Anmeldeliste dieses Kanals setzen" },
       { type: 1, name: "freilos-entfernen", description: "Ein Freilos aus der Anmeldeliste dieses Kanals entfernen" },
       { type: 1, name: "abbrechen", description: "Laufendes Turnier abbrechen und Rollen entfernen" },
