@@ -103,7 +103,7 @@ export function teamDetail(c, data, role, todayDaysRaw) {
         { name: "Aktivität", value: protectedNow ? `🛡️ **Urlaubsschutz** bis <t:${Math.floor(data.protectUntil / 1000)}:f> – die 7-Tage-Regel pausiert.` : `${todayDays === 0 ? "**Aktiv** · heute gespielt" : `${todayDays >= 5 ? "**Achtung**" : "**Aktiv**"} · zuletzt gespielt vor ${todayDays} ${todayDays === 1 ? "Tag" : "Tagen"}`}\n${bar}\nNoch ${left} ${left === 1 ? "Tag" : "Tage"} bis zum Reset`, inline: false },
         { name: "Cups", value: String(data.cups ?? 0), inline: true },
         { name: "Titel", value: String(data.titles ?? 0), inline: true },
-        { name: "💰 Vereinskasse", value: `**${data.coins || 0}** 🪙${data.bigIV ? ` · 📏 ${data.bigIV}× Großer IV` : ""}${data.boost ? ` · 🟣 ${data.boost}× Verstärkung` : ""}`, inline: true },
+        { name: "💰 Vereinskasse", value: `**${data.coins || 0}** 🪙${data.bigIV ? ` · 📏 ${data.bigIV}× Großer IV` : ""}${data.boost ? ` · 🟣 ${data.boost}× Verstärkung` : ""}${data.tickets ? ` · 🎫 ${data.tickets}× Ticket` : ""}`, inline: true },
       ],
     }],
     components: role === "manager"
@@ -189,6 +189,7 @@ export function signupPanel(t, clubs = {}) {
   const times = t.times;
   const head = [
     `## ${esc(t.name)}`,
+    ...(t.ticketOnly ? ["🎫 **Sonderturnier** – Teilnahme nur mit **Sonderturnier-Ticket** aus dem Shop. Das Ticket wird beim Check-in eingelöst."] : []),
     `${STATUS[t.status]}\n⏰ **Anpfiff** <t:${unix(times.kickoff)}:F> · <t:${unix(times.kickoff)}:R>\n👥 **${playing.length}/${closed ? playing.length : target} Mannschaften** · 20 Min pro Runde`,
   ];
   const teamsText =

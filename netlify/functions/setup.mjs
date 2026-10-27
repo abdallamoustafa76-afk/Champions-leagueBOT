@@ -56,6 +56,7 @@ const COMMANDS = [
     options: [
       { type: 3, name: "name", description: "Name des Turniers", required: true, max_length: 60 },
       { type: 3, name: "anpfiff", description: "Anpfiff, z. B. 31.10.2026 20:00", required: true },
+      { type: 5, name: "nur_mit_ticket", description: "Sonderturnier (z. B. Cash Cup): Anmelden nur mit Sonderturnier-Ticket aus dem Shop", required: false },
     ],
   },
   { name: "cl-ergebnis", description: "Ergebnis deines Spiels melden" },

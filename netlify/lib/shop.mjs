@@ -2,7 +2,7 @@
 // Coins gehören dem Verein (Manager + Co-VM). Wird der Verein frei, ist die Kasse weg (der Verein wird gelöscht).
 // Gutschrift automatisch nach jedem Cup (nicht bei Test-Cups), Ausgeben im Shop – kaufen darf nur der Manager.
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
-import { discord, sendMessage, upsertMessage } from "./discord.mjs";
+import { discord, sendMessage, upsertMessage, deleteMessage } from "./discord.mjs";
 import { enqueue } from "./roles.mjs";
 import { nickFor, setNick } from "./names.mjs";
 import { COLOR, isFreilos, flagOf } from "./data.mjs";
@@ -31,6 +31,7 @@ export const ITEMS = {
   urlaub: { label: "Urlaubsschutz", emoji: "🛡️", price: 1500, text: "Die 7-Tage-Regel pausiert 7 Tage." },
   boost: { label: "Große Verstärkung", emoji: "🟣", price: 750, text: "Im nächsten Cup darf das ganze Team lila Verstärkung benutzen." },
   abzeichen: { label: "König-Abzeichen", emoji: "👑", price: 300, text: "Das 👑 hinter euren Spitznamen, z. B. „VM | Real Madrid 👑“." },
+  ticket: { label: "Sonderturnier-Ticket", emoji: "🎫", price: 5000, text: "Eintritt zu einem Sonderturnier wie dem Cash Cup. Wird beim Check-in des Sonderturniers eingelöst." },
 };
 export const BADGES = ["👑"];
 const LOG_MAX = 10;
@@ -89,37 +90,63 @@ export async function payoutCup(t) {
 }
 
 // ---------- Shop-Panel ----------
+const V2 = 1 << 15;
+const site = () => process.env.SITE_URL || process.env.URL || "";
+const fmtC = (n) => Number(n).toLocaleString("de-DE");
+
+/**
+ * Shop-Panel im neuen Discord-Layout (Components V2): Logo oben rechts, jeder Artikel mit eigenem Kaufen-Knopf.
+ */
 export function shopPanel(clubs, treasury = {}, feedbackCh = null) {
   const owned = Object.entries(clubs).filter(([, c]) => (c.coins || 0) > 0).map(([n, c]) => [n, c.coins, false]);
   const free = Object.entries(treasury).filter(([n, x]) => !clubs[n] && (x.coins || 0) > 0).map(([n, x]) => [n, x.coins, true]);
   const rich = [...owned, ...free].sort((a, b) => b[1] - a[1]).slice(0, 10);
   const medal = ["🥇", "🥈", "🥉"];
-  const fmt = (n) => Number(n).toLocaleString("de-DE");
+  const t = (content) => ({ type: 10, content });
+  const sep = (big = false) => ({ type: 14, divider: true, spacing: big ? 2 : 1 });
+  const logo = site() ? { type: 11, media: { url: `${site()}/logo.jpg` } } : null;
+  const head = "# 🛒 Shop\n### Vereinskasse\nMit jedem Cup verdient euer Verein **Coins** 🪙\n-# Kaufen darf nur der Manager";
+  const item = ([k, it]) => ({
+    type: 9,
+    components: [t(`### ${it.emoji} ${it.label}\n${it.text}\n**${fmtC(it.price)} 🪙**`)],
+    accessory: { type: 2, style: 1, label: "Kaufen", custom_id: `shop_buy:${k}` },
+  });
   return {
-    embeds: [
-      {
-        color: COLOR, title: "🛒 SHOP · VEREINSKASSE",
-        description: "Mit jedem Cup verdient euer Verein Coins 🪙. Kaufen darf nur der **Manager**.",
-        fields: [
-          ...Object.values(ITEMS).map((it) => ({ name: `${it.emoji} ${it.label} · ${fmt(it.price)} 🪙`, value: it.text, inline: true })),
-          { name: "So verdient ihr Coins", value: `Teilnahme +${COINS.teilnahme} · Sieg +${COINS.sieg} · Remis +${COINS.remis} · Niederlage ${COINS.niederlage} · Tor +${COINS.tor} · Zu null +${COINS.zunull}\nGruppensieger +${COINS.gruppensieger} · Halbfinale +${COINS.halbfinale} · Finale +${COINS.finale} · Platz 3 +${COINS.platz3}` },
-          { name: "ℹ️ So funktioniert die Vereinskasse", value: `Ihr könnt eure Coins sammeln und bei einem **Cash Cup** einlösen – so verschafft ihr euch dort mehr Vorteile.\n\nDie Coins gehören nicht dem Spieler, sondern der **Mannschaft**. Wer den Verein verlässt, lässt die Coins da – wer den Verein danach übernimmt, bekommt die Kasse.\n\nIdeen für mehr Sachen im Shop? Schreibt sie in ${feedbackCh ? `<#${feedbackCh}>` : "**#Feedback**"}.` },
-        ],
-      },
-      { color: COLOR, title: "💰 Reichste Vereine", description: rich.length ? rich.map(([n, coins, isFree], i) => `${medal[i] || `**${i + 1}.**`} ${flagOf(n)} ${esc(n)} – **${fmt(coins)}** 🪙${isFree ? " · *frei – zu übernehmen!*" : ""}`).join("\n") : "_Noch keine Coins verdient – spielt den ersten Cup!_" },
-    ],
-    components: [
-      row(...Object.entries(ITEMS).map(([k, it]) => btn(it.label, `shop_buy:${k}`, 1, { emoji: { name: it.emoji } }))),
-      row(btn("Meine Kasse", "shop_me", 2, { emoji: { name: "💰" } })),
-    ],
+    flags: V2,
+    allowed_mentions: { parse: [] },
+    components: [{
+      type: 17, accent_color: COLOR,
+      components: [
+        logo ? { type: 9, components: [t(head)], accessory: logo } : t(head),
+        sep(true),
+        ...Object.entries(ITEMS).flatMap((e, i) => (i ? [sep(), item(e)] : [item(e)])),
+        sep(true),
+        t(`### 🪙 So verdient ihr Coins\n` +
+          `✅ Teilnahme **+${COINS.teilnahme}** · Sieg **+${COINS.sieg}** · Remis **+${COINS.remis}** · Niederlage **${COINS.niederlage}**\n` +
+          `⚽ Tor **+${COINS.tor}** · Zu null **+${COINS.zunull}** · Gruppensieger **+${COINS.gruppensieger}**\n` +
+          `🏆 Halbfinale **+${COINS.halbfinale}** · Finale **+${COINS.finale}** · Platz 3 **+${COINS.platz3}**`),
+        sep(),
+        t(`### ℹ️ So funktioniert die Vereinskasse\n` +
+          `Sammelt eure Coins und löst sie bei einem **Cash Cup** ein – so verschafft ihr euch dort mehr Vorteile.\n\n` +
+          `Die Coins gehören nicht dem Spieler, sondern der **Mannschaft**. Wer den Verein verlässt, lässt die Coins da – wer ihn danach übernimmt, bekommt die Kasse.\n\n` +
+          `💡 Ideen für mehr Sachen im Shop? Schreibt sie in ${feedbackCh ? `<#${feedbackCh}>` : "**#Feedback**"}.`),
+        sep(true),
+        t(`### 💰 Reichste Vereine\n` + (rich.length
+          ? rich.map(([n, coins, isFree], i) => `${medal[i] || `\`${i + 1}.\``} ${flagOf(n)} **${esc(n)}** – ${fmtC(coins)} 🪙${isFree ? " · *frei – zu übernehmen!*" : ""}`).join("\n")
+          : "_Noch keine Coins verdient – spielt den ersten Cup!_")),
+        { type: 1, components: [btn("Meine Kasse", "shop_me", 2, { emoji: { name: "💰" } })] },
+      ],
+    }],
   };
 }
 
 export async function refreshShopPanel() {
   const cfg = await getConfig(); if (!cfg.channels.shop) return;
   const p = (await get("panels")) || {};
+  // Wechsel auf das neue Layout: altes Panel (mit Embeds) löschen und neu posten, statt es zu bearbeiten
+  if (p.shop && !p.shopV2) { await deleteMessage(cfg.channels.shop, p.shop).catch(() => {}); p.shop = null; }
   const id = await upsertMessage(cfg.channels.shop, p.shop, shopPanel(await getClubs(), (await get("treasury")) || {}, cfg.channels.feedback));
-  if (id && id !== p.shop) await mutate("panels", (x) => { x.shop = id; }, { initial: { over: [] } });
+  if (id && (id !== p.shop || !p.shopV2)) await mutate("panels", (x) => { x.shop = id; x.shopV2 = true; }, { initial: { over: [] } });
 }
 
 export function balanceView(name, c) {
@@ -127,6 +154,7 @@ export function balanceView(name, c) {
     c.badge ? `👑 König-Abzeichen` : null,
     c.bigIV ? `📏 ${c.bigIV}× Großer IV (wird beim nächsten Cup automatisch eingelöst)` : null,
     c.boost ? `🟣 ${c.boost}× Große Verstärkung (wird beim nächsten Cup automatisch eingelöst)` : null,
+    c.tickets ? `🎫 ${c.tickets}× Sonderturnier-Ticket (wird beim nächsten Sonderturnier eingelöst)` : null,
     c.protectUntil > Date.now() ? `🛡️ Urlaubsschutz bis <t:${Math.floor(c.protectUntil / 1000)}:f>` : null,
   ].filter(Boolean);
   return {
@@ -197,6 +225,12 @@ export async function buyBadge(name, uid, badge = "👑") {
   if (c.co && c.coBase) await setNick(c.co, nickFor(c.coBase, "co", name, badge));
 }
 
+export async function buyTicket(name, uid) {
+  const c = await charge(name, uid, "ticket", (x) => { x.tickets = (x.tickets || 0) + 1; });
+  const cfg = await getConfig();
+  if (cfg.channels.log) await sendMessage(cfg.channels.log, { content: `🎫 ${flagOf(name)} **${esc(name)}** hat ein **Sonderturnier-Ticket** gekauft (jetzt ${c.tickets}× auf Lager).`, allowed_mentions: { parse: [] } });
+  return c.tickets;
+}
 export async function buyBoost(name, uid) { const c = await charge(name, uid, "boost", (x) => { x.boost = (x.boost || 0) + 1; }); return c.boost; }
 export async function buyIV(name, uid) { const c = await charge(name, uid, "iv", (x) => { x.bigIV = (x.bigIV || 0) + 1; }); return c.bigIV; }
 
@@ -208,8 +242,9 @@ export async function redeemCupItems(t) {
   if (t.test) return { bigIV: [], boost: [] };
   const playing = new Set((t.checked || []).filter((c) => !isFreilos(c)));
   const { result } = await mutate("clubs", (cl) => {
-    const r = { bigIV: [], boost: [] };
+    const r = { bigIV: [], boost: [], tickets: [] };
     for (const c of playing) {
+      if (t.ticketOnly && cl[c]?.tickets > 0) { cl[c].tickets--; r.tickets.push(c); book(cl[c], 0, `Sonderturnier-Ticket eingelöst: ${t.name}`); }
       if (cl[c]?.bigIV > 0) { cl[c].bigIV--; r.bigIV.push(c); book(cl[c], 0, `Großer IV eingelöst: ${t.name}`); }
       if (cl[c]?.boost > 0) { cl[c].boost--; r.boost.push(c); book(cl[c], 0, `Große Verstärkung eingelöst: ${t.name}`); }
     }
@@ -219,7 +254,7 @@ export async function redeemCupItems(t) {
 }
 
 // ---------- Kasse bleibt beim Verein ----------
-const KEEP = ["coins", "coinLog", "bigIV", "boost"];
+const KEEP = ["coins", "coinLog", "bigIV", "boost", "tickets"];
 /** Verein wird frei: Kasse und Gutscheine im Tresor parken, bis jemand den Verein übernimmt */
 export async function parkTreasury(name, data) {
   if (!data || !KEEP.some((k) => data[k])) return;

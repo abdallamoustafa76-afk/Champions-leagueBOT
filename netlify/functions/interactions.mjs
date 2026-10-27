@@ -262,8 +262,9 @@ async function manualCup(i, context) {
   if (!kickoff) return eph("Anpfiff bitte so angeben: `31.10.2026 20:00`");
   if (kickoff - 60 * 60000 < Date.now() + 2 * 60000) return eph("Der Anmeldeschluss (60 Min. vor Anpfiff) muss in der Zukunft liegen.");
   return background(i, context, async () => {
-    const t = await F.launchTournament({ channelId: i.channel_id, name: o.name.trim(), times: F.timesFromKickoff(kickoff) });
-    return `✅ **${t.name}** ist erstellt.`;
+    let t = await F.launchTournament({ channelId: i.channel_id, name: o.name.trim(), times: F.timesFromKickoff(kickoff) });
+    if (o.nur_mit_ticket) { ({ value: t } = await mutate(tKey(i.channel_id), (x) => { x.ticketOnly = true; })); await F.refreshSignup(t); }
+    return `✅ **${t.name}** ist erstellt.${o.nur_mit_ticket ? "\n🎫 Sonderturnier: Anmelden kann nur, wer ein Sonderturnier-Ticket hat. Es wird beim Check-in eingelöst." : ""}`;
   });
 }
 
@@ -548,6 +549,7 @@ async function component(i, context) {
       if (b) return eph(`❌ ${flagOf(mine.club)} **${V.esc(mine.club)}** kann sich nicht anmelden: <@${b.user}> ${banText(b)}.`);
     }
     if (id === "cup_join" && !(await F.rulesAccepted(uid))) return eph(`📜 Bitte akzeptiere zuerst das Regelwerk${cfg.channels.rules ? ` in <#${cfg.channels.rules}>` : ""} – danach kannst du deine Mannschaft anmelden.`);
+    if (id === "cup_join" && (await get(tKey(i.channel_id)))?.ticketOnly && !(mine.data.tickets > 0)) return eph(`🎫 Das ist ein **Sonderturnier** – zum Anmelden braucht ${flagOf(mine.club)} **${V.esc(mine.club)}** ein **Sonderturnier-Ticket** aus dem Shop${cfg.channels.shop ? ` in <#${cfg.channels.shop}>` : ""} (${SH.ITEMS.ticket.price.toLocaleString("de-DE")} 🪙).`);
     const { value: t, result } = await mutate(tKey(i.channel_id), (t) => {
       if (id === "cup_join") { const pos = T.register(t, mine.club); const f = T.fmtOf(t.reg.length); return f && pos > f ? `${flagOf(mine.club)} **${V.esc(mine.club)}** ist angemeldet – **Warteliste Platz ${pos - f}**.` : `${flagOf(mine.club)} **${V.esc(mine.club)}** ist angemeldet – Platz ${pos}.`; }
       if (id === "cup_leave") { T.unregister(t, mine.club); return "Deine Mannschaft wurde abgemeldet."; }
@@ -740,6 +742,7 @@ async function shopComponent(i, context, id, uid) {
   }
   if (id === "shop_no") return reply(i, { content: "Abgebrochen.", components: [] });
   if (id === "shop_ok:abzeichen") return background(i, context, async () => { await SH.buyBadge(mine.club, uid, "👑"); await SH.refreshShopPanel(); return "👑 **König-Abzeichen** gekauft – eure Spitznamen enden jetzt mit 👑."; }, { update: true });
+  if (id === "shop_ok:ticket") return background(i, context, async () => { const n = await SH.buyTicket(mine.club, uid); await SH.refreshShopPanel(); return `🎫 **Sonderturnier-Ticket** gekauft (${n}× auf Lager). Ihr könnt euch damit beim nächsten Sonderturnier wie dem Cash Cup anmelden – eingelöst wird es beim Check-in.`; }, { update: true });
   if (id === "shop_ok:boost") return background(i, context, async () => { const n = await SH.buyBoost(mine.club, uid); await SH.refreshShopPanel(); return `🟣 **Große Verstärkung** gekauft (${n}× auf Lager). Sie wird beim nächsten Cup, in dem ihr eincheckt, automatisch eingelöst: Das ganze Team darf dann **lila Verstärkung** benutzen.`; }, { update: true });
   if (id === "shop_ok:iv") return background(i, context, async () => { const n = await SH.buyIV(mine.club, uid); await SH.refreshShopPanel(); return `📏 **Großer IV** gekauft (${n}× auf Lager). Er wird beim nächsten Cup, in dem ihr eincheckt, automatisch eingelöst: 1 Innenverteidiger darf dann bis **1,90 m** groß sein.`; }, { update: true });
   if (id === "shop_ok:urlaub") return background(i, context, async () => { const until = await SH.buyVacation(mine.club, uid); await SH.refreshShopPanel(); return `🛡️ Urlaubsschutz gekauft – die 7-Tage-Regel pausiert bis <t:${Math.floor(until / 1000)}:f>.`; }, { update: true });
