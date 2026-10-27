@@ -87,6 +87,7 @@ const COMMANDS = [
       ] },
       { type: 1, name: "abmelden", description: "Eine Mannschaft aus der Anmeldeliste dieses Kanals entfernen", options: [
         { type: 3, name: "verein", description: "Vereinsname genau wie in der Liste", required: true },
+        { ...tag, required: false, description: "Liste von welchem Tag? (leer = Liste in diesem Kanal)" },
         { type: 3, name: "grund", description: "Grund (bekommt das Team als Benachrichtigung)", required: false, max_length: 200 },
       ] },
       { type: 1, name: "freilos-hinzufügen", description: "Ein Freilos in die Anmeldeliste dieses Kanals setzen" },

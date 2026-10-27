@@ -329,9 +329,11 @@ async function admin(i, context, cfg) {
     return background(i, context, async () => {
       const name = CLUBS.find((c) => c.name.toLowerCase() === String(o.verein).trim().toLowerCase())?.name;
       if (!name) throw new Error("Diesen Verein gibt es nicht. Bitte genau wie in der Liste schreiben.");
-      const t0 = await get(tKey(i.channel_id));
-      if (!t0) throw new Error("In diesem Kanal gibt es keine Anmeldeliste – führ den Befehl im Kanal mit der Liste aus.");
-      const { value: t } = await mutate(tKey(i.channel_id), (t) => {
+      const ch = o.tag ? ((await get("zeitplan")) || {})[o.tag]?.channelId : i.channel_id;
+      if (!ch) throw new Error(`Für ${DAYS[o.tag - 1]} ist kein Tageskanal eingestellt.`);
+      const t0 = await get(tKey(ch));
+      if (!t0) throw new Error(o.tag ? `Für ${DAYS[o.tag - 1]} gibt es gerade keine Anmeldeliste.` : "In diesem Kanal gibt es keine Anmeldeliste – gib den Tag an, z. B. `tag: Montag`.");
+      const { value: t } = await mutate(tKey(ch), (t) => {
         if (t.status === "anmeldung") return T.unregister(t, name);
         if (t.status === "checkin" && t.wait?.includes(name)) { t.wait = t.wait.filter((c) => c !== name); t.waitChecked = (t.waitChecked || []).filter((c) => c !== name); return; }
         throw new Error(t.status === "checkin" ? "Nach der Auslosung kann nur noch die Warteliste bearbeitet werden. Spielt das Team schon mit, lass es nicht einchecken – es wird dann automatisch ersetzt." : "Die Anmeldung ist schon vorbei.");
