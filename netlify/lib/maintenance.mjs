@@ -1,4 +1,5 @@
 // Hintergrund-Aufgaben: Manager-Rolle ↔ Spieler-Rolle abgleichen, 7-Tage-Inaktivität.
+import { coIds, isCo, removeCo } from "./co.mjs";
 import { get, set, mutate, getConfig, getClubs } from "./store.mjs";
 import { listMembers, sendMessage } from "./discord.mjs";
 import { notify } from "./notify.mjs";
@@ -37,7 +38,7 @@ export async function syncManagerRoles(members) {
   for (const id of removed) {
     for (const [name, c] of Object.entries(clubs)) {
       if (c.manager === id) await releaseClub(name, { transferToCo: true, reason: "Manager-Rolle wurde entfernt" });
-      else if (c.co === id) { await mutate("clubs", (cl) => { if (cl[name]?.co === id) cl[name].co = null; }, { initial: {} }); await refreshOverview(); }
+      else if (isCo(c, id)) { await mutate("clubs", (cl) => { if (cl[name]) removeCo(cl[name], id); }, { initial: {} }); await refreshOverview(); }
     }
   }
 }
@@ -53,7 +54,7 @@ export async function dailyInactivity(now = Date.now()) {
   for (const [name, c] of Object.entries(clubs)) {
     const { lastActiveKey } = await import("./shop.mjs");
     const days = daysBetween(lastActiveKey(c, todayKey), today); // Urlaubsschutz verschiebt den Start nach hinten
-    const users = [c.manager, c.co].filter(Boolean);
+    const users = [c.manager, ...coIds(c)].filter(Boolean);
     if (days >= INACTIVE_DAYS) {
       await releaseClub(name, { reason: `${INACTIVE_DAYS} Tage keinen Cup gespielt` });
       await notify(users, { embeds: [{ color: COLOR, title: `${flagOf(name)} Mannschaft zurückgesetzt`, description: `Ihr habt ${INACTIVE_DAYS} Tage keinen Cup gespielt. **${name}** ist jetzt wieder frei. Du kannst dir jederzeit eine neue Mannschaft nehmen.` }] });

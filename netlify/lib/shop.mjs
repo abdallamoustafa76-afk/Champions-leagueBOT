@@ -1,6 +1,7 @@
 // Vereinskasse & Shop.
 // Coins gehören dem Verein (Manager + Co-VM). Wird der Verein frei, ist die Kasse weg (der Verein wird gelöscht).
 // Gutschrift automatisch nach jedem Cup (nicht bei Test-Cups), Ausgeben im Shop – kaufen darf nur der Manager.
+import { coList, coIds } from "./co.mjs";
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
 import { discord, sendMessage, upsertMessage, deleteMessage } from "./discord.mjs";
 import { enqueue } from "./roles.mjs";
@@ -213,7 +214,7 @@ export async function buyColor(name, uid, color) {
       if (mgr) await discord(`/guilds/${G()}/roles`, "PATCH", [{ id: roleId, position: mgr.position + 1 }]);
       await mutate("clubs", (cl) => { if (cl[name]) cl[name].colorRole = roleId; }, { initial: {} });
     }
-    await enqueue([c.manager, c.co].filter(Boolean).map((u) => ({ u, add: [roleId], why: "Shop: Vereinsfarbe" })));
+    await enqueue([c.manager, ...coIds(c)].filter(Boolean).map((u) => ({ u, add: [roleId], why: "Shop: Vereinsfarbe" })));
     return roleId;
   } catch (e) { await refund(name, "farbe"); throw e; }
 }
@@ -222,7 +223,7 @@ export async function buyBadge(name, uid, badge = "👑") {
   if (!BADGES.includes(badge)) throw new Error("Unbekanntes Abzeichen.");
   const c = await charge(name, uid, "abzeichen", (x) => { if (x.badge === badge) throw new Error("Ihr habt das 👑 König-Abzeichen schon."); x.badge = badge; });
   if (c.managerBase) await setNick(c.manager, nickFor(c.managerBase, "manager", name, badge));
-  if (c.co && c.coBase) await setNick(c.co, nickFor(c.coBase, "co", name, badge));
+  for (const x of coList(c)) if (x.base) await setNick(x.id, nickFor(x.base, "co", name, badge));
 }
 
 export async function buyTicket(name, uid) {
@@ -283,7 +284,7 @@ export async function syncColorRoles(members) {
   if (!members) return;
   const clubs = await getClubs();
   const owner = new Map();
-  for (const c of Object.values(clubs)) if (c.colorRole) owner.set(c.colorRole, new Set([c.manager, c.co].filter(Boolean)));
+  for (const c of Object.values(clubs)) if (c.colorRole) owner.set(c.colorRole, new Set([c.manager, ...coIds(c)].filter(Boolean)));
   const pending = new Set(((await get("rolequeue")) || []).map((o) => o.u));
   const ops = [];
   for (const m of members) {

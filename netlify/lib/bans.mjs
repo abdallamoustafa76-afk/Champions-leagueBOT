@@ -1,4 +1,5 @@
 // Sperrliste: Personen sperren, automatisch ablaufen lassen.
+import { isCo } from "./co.mjs";
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
 import { sendMessage, upsertMessage } from "./discord.mjs";
 import { notify } from "./notify.mjs";
@@ -27,7 +28,7 @@ export async function refreshBanPanel() {
 export async function ban(users, reason, days, byId, note = "") {
   const cfg = await getConfig(), clubs = await getClubs();
   const now = Date.now(), until = now + days * 86400000;
-  const clubOf = (u) => Object.entries(clubs).find(([, c]) => c.manager === u || c.co === u)?.[0] || null;
+  const clubOf = (u) => Object.entries(clubs).find(([, c]) => c.manager === u || isCo(c, u))?.[0] || null;
   await mutate("bans", (list) => {
     for (const u of users) {
       const old = list.find((b) => b.user === u && b.until > now);

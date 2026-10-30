@@ -1,4 +1,5 @@
 // Abläufe mit Discord-Auswirkungen: Posts, Rollen, Phasenwechsel.
+import { coList, coIds, isCo, setCos } from "./co.mjs";
 import { get, set, del, mutate, keys, getConfig, getClubs, tKey } from "./store.mjs";
 import { sendMessage, editMessage, upsertMessage, sendWithFile, deleteMessage } from "./discord.mjs";
 import { enqueue } from "./roles.mjs";
@@ -13,11 +14,11 @@ import { scheduleCleanup, purgeExcept } from "./cleanup.mjs";
 export function clubOfUser(clubs, uid) {
   for (const [name, c] of Object.entries(clubs)) {
     if (c.manager === uid) return { club: name, role: "manager", data: c };
-    if (c.co === uid) return { club: name, role: "co", data: c };
+    if (isCo(c, uid)) return { club: name, role: "co", data: c };
   }
   return null;
 }
-export const membersOf = (clubs, name) => [clubs[name]?.manager, clubs[name]?.co].filter(Boolean);
+export const membersOf = (clubs, name) => [clubs[name]?.manager, ...coIds(clubs[name])].filter(Boolean);
 
 async function panels() { return (await get("panels")) || { over: [] }; }
 async function savePanel(key, val) { await mutate("panels", (p) => { p[key] = val; }, { initial: { over: [] } }); }
@@ -72,14 +73,16 @@ export async function releaseClub(name, { transferToCo = false, reason = "" } = 
   const cfg = await getConfig();
   const { result } = await mutateClubsSafe((clubs) => {
     const c = clubs[name]; if (!c) return null;
-    if (transferToCo && c.co) {
+    const cos = coList(c);
+    if (transferToCo && cos.length) {
       const old = { id: c.manager, orig: c.managerOrigNick ?? null };
-      c.manager = c.co; c.managerBase = c.coBase; c.managerOrigNick = c.coOrigNick ?? null;
-      c.co = null; c.coBase = null; c.coOrigNick = null;
+      const next = cos[0]; // der am längsten eingetragene Co-VM wird Manager
+      c.manager = next.id; c.managerBase = next.base; c.managerOrigNick = next.orig ?? null;
+      setCos(c, cos.slice(1));
       return { transferred: true, old, now: c.manager, base: c.managerBase, badge: c.badge };
     }
     delete clubs[name];
-    return { transferred: false, co: c.co, manager: c.manager, managerOrig: c.managerOrigNick ?? null, coOrig: c.coOrigNick ?? null, colorRole: c.colorRole ?? null, data: c };
+    return { transferred: false, cos, manager: c.manager, managerOrig: c.managerOrigNick ?? null, colorRole: c.colorRole ?? null, data: c };
   });
   if (!result) return null;
   // Spitznamen anpassen bzw. zurücksetzen
@@ -88,9 +91,9 @@ export async function releaseClub(name, { transferToCo = false, reason = "" } = 
     if (result.base) await setNick(result.now, nickFor(result.base, "manager", name, result.badge));
   } else {
     if (result.manager) await setNick(result.manager, result.managerOrig);
-    if (result.co) await setNick(result.co, result.coOrig);
+    for (const x of result.cos || []) await setNick(x.id, x.orig ?? null);
   }
-  if (!result.transferred && result.co) await enqueue([{ u: result.co, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Mannschaft aufgelöst – Co-VM entfernt" }]);
+  if (!result.transferred && result.cos?.length) await enqueue(result.cos.map((x) => ({ u: x.id, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Mannschaft aufgelöst – Co-VM entfernt" })));
   if (!result.transferred && result.colorRole) await (await import("./shop.mjs")).deleteColorRole(result.colorRole);
   if (!result.transferred) await (await import("./shop.mjs")).parkTreasury(name, result.data); // Kasse bleibt beim Verein
   (await import("./shop.mjs")).refreshShopPanel().catch(() => {});

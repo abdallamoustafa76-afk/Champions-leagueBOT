@@ -1,4 +1,5 @@
 // /cl-einrichten alles: Rollen, Kanäle erkennen/anlegen, Rechte, Wochenplan, Panels – in einem Rutsch.
+import { coList } from "./co.mjs";
 import { get, set, del, keys, mutate, getConfig } from "./store.mjs";
 import { discord, getRoles, createRole, deleteMessage } from "./discord.mjs";
 import { GROUP_NAMES, ROUND_ROLES, DAYS, CHANNEL_TYPES } from "./data.mjs";
@@ -257,7 +258,7 @@ export async function resetBot(scope = "setup") {
     for (const c of Object.values(clubs)) {
       if (Date.now() - started > 12000) break; // Zeitlimit – restliche Spitznamen bleiben
       if (c.manager && (await setNick(c.manager, c.managerOrigNick ?? null))) res.nicks++;
-      if (c.co && (await setNick(c.co, c.coOrigNick ?? null))) res.nicks++;
+      for (const x of coList(c)) if (await setNick(x.id, x.orig ?? null)) res.nicks++;
     }
     for (const k of ["clubs", "stats", "bans", "rules", "mreq", "managers", "knownMembers", "rolequeue", "autodelete", "daily", "active"]) await del(k);
     for (const k of await keys("t:")) await del(k);

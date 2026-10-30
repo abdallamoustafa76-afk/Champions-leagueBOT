@@ -1,4 +1,5 @@
 import nacl from "tweetnacl";
+import { coList, coIds, addCo, removeCo, MAX_CO } from "../lib/co.mjs";
 import { get, set, mutate, getConfig, getClubs, tKey } from "../lib/store.mjs";
 import { editOriginal, discord, sendMessage } from "../lib/discord.mjs";
 import { enqueue, processQueue } from "../lib/roles.mjs";
@@ -469,7 +470,7 @@ async function component(i, context) {
       const mine = F.clubOfUser(await getClubs(), uid);
       const what = !mine ? "" : mine.role === "co"
         ? `\nDu bist dann nicht mehr Co-VM von ${flagOf(mine.club)} **${V.esc(mine.club)}**.`
-        : mine.data.co ? `\nDein Verein ${flagOf(mine.club)} **${V.esc(mine.club)}** geht an deinen Co-VM <@${mine.data.co}>.` : `\n⚠️ Dein Verein ${flagOf(mine.club)} **${V.esc(mine.club)}** wird **frei** und kann von jemand anderem übernommen werden.`;
+        : coIds(mine.data).length ? `\nDein Verein ${flagOf(mine.club)} **${V.esc(mine.club)}** geht an deinen Co-VM <@${coIds(mine.data)[0]}>.` : `\n⚠️ Dein Verein ${flagOf(mine.club)} **${V.esc(mine.club)}** wird **frei** und kann von jemand anderem übernommen werden.`;
       return { type: 4, data: { flags: 64, allowed_mentions: { parse: [] }, content: `**Manager-Rolle wirklich abgeben?**${what}\nDu bekommst stattdessen die Rolle **Spieler**.`, components: [{ type: 1, components: [{ type: 2, style: 2, label: "Abbrechen", custom_id: "role_manager_keep" }, { type: 2, style: 4, label: "Ja, abgeben", custom_id: "role_manager_off" }] }] } };
     }
     const b = await B.findBan([uid]);
@@ -486,8 +487,8 @@ async function component(i, context) {
       const mine = F.clubOfUser(await getClubs(), uid);
       if (mine?.role === "manager") await F.releaseClub(mine.club, { transferToCo: true, reason: "Manager-Rolle abgegeben" });
       if (mine?.role === "co") {
-        const orig = mine.data.coOrigNick ?? null;
-        await mutate("clubs", (cl) => { if (cl[mine.club]?.co === uid) Object.assign(cl[mine.club], { co: null, coBase: null, coOrigNick: null }); }, { initial: {} });
+        const orig = coList(mine.data).find((x) => x.id === uid)?.orig ?? null;
+        await mutate("clubs", (cl) => { if (cl[mine.club]) removeCo(cl[mine.club], uid); }, { initial: {} });
         await setNick(uid, orig);
         await F.refreshOverview();
       }
@@ -528,45 +529,60 @@ async function component(i, context) {
     if (id === "team_ea") return V.eaModal("team_ea_m", "EA-Club ändern", mine.data.ea);
     if (mine.role === "co") {
       if (id === "team_co_quit") {
-        const orig = mine.data.coOrigNick ?? null;
-        await mutate("clubs", (cl) => { if (cl[mine.club]?.co === uid) Object.assign(cl[mine.club], { co: null, coBase: null, coOrigNick: null }); }, { initial: {} });
+        const orig = coList(mine.data).find((x) => x.id === uid)?.orig ?? null;
+        await mutate("clubs", (cl) => { if (cl[mine.club]) removeCo(cl[mine.club], uid); }, { initial: {} });
         await enqueue([{ u: uid, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: "Als Co-VM ausgetreten" }]);
         later(context, async () => { await setNick(uid, orig); await F.refreshOverview(); });
         return reply(i, { content: `Du bist als Co-VM von ${flagOf(mine.club)} **${V.esc(mine.club)}** ausgetreten.`, embeds: [], components: [] });
       }
       return reply(i, { content: "Das kann nur der Manager der Mannschaft.", embeds: [], components: [] });
     }
-    if (id === "team_co_add") return reply(i, V.coSelect());
+    if (id === "team_co_add") {
+      if (coIds(mine.data).length >= MAX_CO) return reply(i, detail(mine, `Ihr habt schon ${MAX_CO} Co-VMs – mehr gehen nicht.`));
+      return reply(i, V.coSelect());
+    }
     if (id === "team_co_pick") {
       const target = i.data.values?.[0];
       const user = i.data.resolved?.users?.[target];
       if (!target || target === uid) return reply(i, { ...V.coSelect(), content: "Du kannst dich nicht selbst als Co-VM eintragen." });
       if (user?.bot) return reply(i, { ...V.coSelect(), content: "Bots können keine Co-VMs sein." });
       if (F.clubOfUser(clubs, target)) return reply(i, { ...V.coSelect(), content: "Dieses Mitglied gehört schon zu einer Mannschaft." });
+      if (coIds(mine.data).length >= MAX_CO) return reply(i, detail(mine, `Ihr habt schon ${MAX_CO} Co-VMs – mehr gehen nicht.`));
       const tb = await B.findBan([target]);
       if (tb) return reply(i, { ...V.coSelect(), content: `<@${target}> ${banText(tb)} und kann gerade kein Co-VM werden.` });
       const tm = i.data.resolved?.members?.[target];
       const coBase = baseNameOf(tm, user);
-      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]?.manager === uid) Object.assign(cl[mine.club], { co: target, coBase, coOrigNick: tm?.nick ?? null }); }, { initial: {} });
+      const { value, result: added } = await mutate("clubs", (cl) => {
+        const c = cl[mine.club];
+        if (c?.manager !== uid || coIds(c).length >= MAX_CO) return false;
+        addCo(c, { id: target, base: coBase, orig: tm?.nick ?? null });
+        return true;
+      }, { initial: {} });
+      if (!added) return reply(i, detail({ ...mine, data: value[mine.club] || mine.data }, `Ihr habt schon ${MAX_CO} Co-VMs – mehr gehen nicht.`));
       await enqueue([{ u: target, add: [cfg.roles.manager], rem: [cfg.roles.spieler], why: `Co-VM von ${mine.club}` }]);
       later(context, async () => { await setNick(target, nickFor(coBase, "co", mine.club, value[mine.club]?.badge)); await F.refreshOverview(); });
       return reply(i, detail({ ...mine, data: value[mine.club] }, `✅ <@${target}> ist jetzt Co-VM – Rolle Manager vergeben, Rolle Spieler entfernt.`));
     }
-    if (id === "team_co_rem") {
-      const co = mine.data.co; if (!co) return reply(i, detail(mine));
-      const orig = mine.data.coOrigNick ?? null;
-      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]) Object.assign(cl[mine.club], { co: null, coBase: null, coOrigNick: null }); }, { initial: {} });
+    if (id === "team_co_rem" || id === "team_co_rem_pick") {
+      const cos = coList(mine.data);
+      if (!cos.length) return reply(i, detail(mine));
+      if (id === "team_co_rem" && cos.length > 1) return reply(i, V.coRemoveSelect(cos));
+      const co = id === "team_co_rem_pick" ? i.data.values?.[0] : cos[0].id;
+      const entry = cos.find((x) => x.id === co);
+      if (!entry) return reply(i, detail(mine, "Dieser Co-VM ist nicht mehr eingetragen."));
+      const orig = entry.orig ?? null;
+      const { value } = await mutate("clubs", (cl) => { if (cl[mine.club]) removeCo(cl[mine.club], co); }, { initial: {} });
       await enqueue([{ u: co, add: [cfg.roles.spieler], rem: [cfg.roles.manager], why: `Co-VM von ${mine.club} entfernt` }]);
       later(context, async () => { await setNick(co, orig); await F.refreshOverview(); });
-      return reply(i, detail({ ...mine, data: value[mine.club] }, "✅ Co-VM entfernt – Rolle Manager entfernt, Rolle Spieler wieder vergeben."));
+      return reply(i, detail({ ...mine, data: value[mine.club] }, `✅ <@${co}> ist kein Co-VM mehr – Rolle Manager entfernt, Rolle Spieler wieder vergeben.`));
     }
     const busy = async () => { for (const t of await F.allTournaments()) if (!["fertig", "abgesagt", "geloescht"].includes(t.status) && (t.reg.includes(mine.club) || t.playing.includes(mine.club))) return true; return false; };
-    if (id === "team_leave") return reply(i, V.confirmView(mine.data.co ? `Mannschaft verlassen? <@${mine.data.co}> wird neuer Manager.` : `Mannschaft verlassen? ${V.esc(mine.club)} wird für alle frei.`, "team_leave_ok", "Verlassen"));
+    if (id === "team_leave") return reply(i, V.confirmView(coIds(mine.data).length ? `Mannschaft verlassen? <@${coIds(mine.data)[0]}> wird neuer Manager.` : `Mannschaft verlassen? ${V.esc(mine.club)} wird für alle frei.`, "team_leave_ok", "Verlassen"));
     if (id === "team_del") return reply(i, V.confirmView(`Mannschaft wirklich löschen? ${V.esc(mine.club)} wird für alle frei, und eure Statistiken werden gelöscht. Das kann nicht rückgängig gemacht werden.`, "team_del_ok", "Endgültig löschen"));
     if (id === "team_leave_ok" || id === "team_del_ok") {
       if (await busy()) return reply(i, { content: "Während eure Mannschaft für einen Cup angemeldet ist, geht das nicht. Meldet euch zuerst ab oder wartet bis nach dem Cup.", embeds: [], components: [] });
       later(context, () => F.releaseClub(mine.club, { transferToCo: id === "team_leave_ok", reason: id === "team_del_ok" ? "Mannschaft gelöscht" : "Manager hat die Mannschaft verlassen" }));
-      return reply(i, { content: id === "team_del_ok" ? `Mannschaft gelöscht. ${V.esc(mine.club)} ist wieder frei.` : mine.data.co ? `Du hast die Mannschaft verlassen. <@${mine.data.co}> ist jetzt Manager.` : `Du hast die Mannschaft verlassen. ${V.esc(mine.club)} ist wieder frei.`, embeds: [], components: [] });
+      return reply(i, { content: id === "team_del_ok" ? `Mannschaft gelöscht. ${V.esc(mine.club)} ist wieder frei.` : coIds(mine.data).length ? `Du hast die Mannschaft verlassen. <@${coIds(mine.data)[0]}> ist jetzt Manager.` : `Du hast die Mannschaft verlassen. ${V.esc(mine.club)} ist wieder frei.`, embeds: [], components: [] });
     }
   }
 
@@ -611,9 +627,9 @@ async function component(i, context) {
     if (id.startsWith("ban_r:")) return reply(i, V.banStep3(id.split(":")[1], Number(i.data.values[0])));
     if (id.startsWith("ban_d:")) {
       const [, u, r] = id.split(":");
-      const mine = F.clubOfUser(await getClubs(), u);
-      const partner = mine ? (mine.role === "manager" ? mine.data.co : mine.data.manager) : null;
-      return reply(i, V.banStep4(u, Number(r), Number(i.data.values[0]), partner));
+      const clubs = await getClubs(), mine = F.clubOfUser(clubs, u);
+      const partners = mine ? F.membersOf(clubs, mine.club).filter((x) => x !== u) : [];
+      return reply(i, V.banStep4(u, Number(r), Number(i.data.values[0]), partners));
     }
     if (id.startsWith("ban_note:")) return V.banNoteModal(id.slice("ban_note:".length));
     if (id.startsWith("ban_ok:")) return doBan(i, context, id.slice("ban_ok:".length), "");
@@ -664,7 +680,7 @@ async function modal(i, context) {
     const { result } = await mutate("clubs", (cl) => {
       if (F.clubOfUser(cl, uid)) return "schon";
       if (cl[c.name]) return "vergeben";
-      cl[c.name] = { manager: uid, co: null, ea, since: Date.now(), lastPlayed: todayKey(), cups: 0, titles: 0, managerBase: baseNameOf(i.member), managerOrigNick: i.member?.nick ?? null };
+      cl[c.name] = { manager: uid, cos: [], ea, since: Date.now(), lastPlayed: todayKey(), cups: 0, titles: 0, managerBase: baseNameOf(i.member), managerOrigNick: i.member?.nick ?? null };
       return "ok";
     }, { initial: {} });
     if (result === "vergeben") return reply(i, { content: `${c.name} wurde gerade vergeben – wähl eine andere Mannschaft.`, ...V.regClubs(await getClubs(), c.li) });
@@ -845,10 +861,9 @@ async function doBan(i, context, rest, note) {
   const [u, r, d, both] = rest.split(":");
   const users = [u];
   if (both === "2") {
-    const mine = F.clubOfUser(await getClubs(), u);
-    const partner = mine ? (mine.role === "manager" ? mine.data.co : mine.data.manager) : null;
-    if (partner) users.push(partner);
+    const clubs = await getClubs(), mine = F.clubOfUser(clubs, u);
+    if (mine) users.push(...F.membersOf(clubs, mine.club).filter((x) => x !== u));
   }
   later(context, () => B.ban(users, Number(r), Number(d), uidOf(i), note));
-  return reply(i, { content: `✅ ${users.map((x) => `<@${x}>`).join(" und ")} ${users.length > 1 ? "sind" : "ist"} für **${d} ${d === "1" ? "Tag" : "Tage"}** gesperrt. Die Sperrliste wird aktualisiert, und die Betroffenen werden im Benachrichtigungs-Kanal markiert.`, components: [] });
+  return reply(i, { content: `✅ ${users.map((x) => `<@${x}>`).join(", ").replace(/, ([^,]*)$/, " und $1")} ${users.length > 1 ? "sind" : "ist"} für **${d} ${d === "1" ? "Tag" : "Tage"}** gesperrt. Die Sperrliste wird aktualisiert, und die Betroffenen werden im Benachrichtigungs-Kanal markiert.`, components: [] });
 }

@@ -1,4 +1,5 @@
 // Alle Discord-Ansichten (Embeds, Buttons, Formulare). Alle Ränder in Blau.
+import { coIds, isCo, MAX_CO } from "./co.mjs";
 import { COLOR, LEAGUES, CLUBS, FORMATS, KO_SIZE, KO_NAME, BAN_REASONS, BAN_DAYS, BAN_DEFAULT_DAYS, VIDEO_LIMIT, VIDEO_WINDOW_MIN, RULES, FREIGABE_MIN, isFreilos, flagOf, club as clubInfo, clubIndex } from "./data.mjs";
 import { fmtOf, nextFmt, standings, currentMatches, winner, koRoundName } from "./tournament.mjs";
 
@@ -98,7 +99,7 @@ export function teamDetail(c, data, role, todayDaysRaw) {
       description: `${clubInfo(c).league}${role === "co" ? " · Du bist **Co-VM**" : ""}`,
       fields: [
         { name: "Manager", value: `<@${data.manager}>`, inline: true },
-        { name: "Co-VM", value: data.co ? `<@${data.co}>` : "–", inline: true },
+        { name: `Co-VMs (${coIds(data).length}/${MAX_CO})`, value: coIds(data).length ? coIds(data).map((u) => `<@${u}>`).join("\n") : "–", inline: true },
         { name: "EA-Club", value: `${esc(data.ea || "–")}\n${data.eaId ? "-# ✅ mit EA verknüpft" : data.eaLookup?.ok === false && !data.eaLookup?.err ? "-# ⚠️ bei EA nicht gefunden – Namen prüfen" : "-# ⏳ noch nicht verknüpft"}`, inline: true },
         { name: "Aktivität", value: protectedNow ? `🛡️ **Urlaubsschutz** bis <t:${Math.floor(data.protectUntil / 1000)}:f> – die 7-Tage-Regel pausiert.` : `${todayDays === 0 ? "**Aktiv** · heute gespielt" : `${todayDays >= 5 ? "**Achtung**" : "**Aktiv**"} · zuletzt gespielt vor ${todayDays} ${todayDays === 1 ? "Tag" : "Tagen"}`}\n${bar}\nNoch ${left} ${left === 1 ? "Tag" : "Tage"} bis zum Reset`, inline: false },
         { name: "Cups", value: String(data.cups ?? 0), inline: true },
@@ -108,8 +109,8 @@ export function teamDetail(c, data, role, todayDaysRaw) {
     }],
     components: role === "manager"
       ? [
-          row(btn("Co-VM hinzufügen", "team_co_add", 1, { disabled: !!data.co }), btn("EA-Club ändern", "team_ea", 1)),
-          row(btn("Co-VM entfernen", "team_co_rem", 2, { disabled: !data.co }), btn("Mannschaft verlassen", "team_leave", 4), btn("Mannschaft löschen", "team_del", 4)),
+          row(btn("Co-VM hinzufügen", "team_co_add", 1, { disabled: coIds(data).length >= MAX_CO }), btn("EA-Club ändern", "team_ea", 1)),
+          row(btn("Co-VM entfernen", "team_co_rem", 2, { disabled: !coIds(data).length }), btn("Mannschaft verlassen", "team_leave", 4), btn("Mannschaft löschen", "team_del", 4)),
         ]
       : [row(btn("EA-Club ändern", "team_ea", 1), btn("Als Co-VM austreten", "team_co_quit", 4))],
   };
@@ -117,9 +118,20 @@ export function teamDetail(c, data, role, todayDaysRaw) {
 
 export function coSelect() {
   return {
-    content: "**Wähle deinen Co-VM.** Er kann die Mannschaft anmelden, einchecken und Ergebnisse melden. Er bekommt die Rolle Manager, die Rolle Spieler wird entfernt.",
+    content: `**Wähle einen Co-VM** (bis zu ${MAX_CO} pro Mannschaft). Er kann die Mannschaft anmelden, einchecken und Ergebnisse melden. Er bekommt die Rolle Manager, die Rolle Spieler wird entfernt.`,
     embeds: [],
     components: [row({ type: 5, custom_id: "team_co_pick", placeholder: "Mitglied auswählen", min_values: 1, max_values: 1 }), row(btn("Zurück", "team_open"))],
+  };
+}
+
+export function coRemoveSelect(cos) {
+  return {
+    content: "**Welchen Co-VM willst du entfernen?** Er bekommt die Rolle Spieler zurück.",
+    embeds: [],
+    components: [
+      row({ type: 3, custom_id: "team_co_rem_pick", placeholder: "Co-VM auswählen", min_values: 1, max_values: 1, options: cos.map((x) => ({ label: (x.base || x.id).slice(0, 100), value: x.id })) }),
+      row(btn("Zurück", "team_open")),
+    ],
   };
 }
 
@@ -131,7 +143,7 @@ export function confirmView(text, okId, okLabel) {
 export function overviewMessages(clubs) {
   const taken = Object.keys(clubs).length;
   const leagueEmbed = (l) => {
-    const lines = l.clubs.filter((c) => clubs[c]).map((c) => `**${esc(c)}** · <@${clubs[c].manager}>${clubs[c].co ? ` + <@${clubs[c].co}>` : ""}`);
+    const lines = l.clubs.filter((c) => clubs[c]).map((c) => `**${esc(c)}** · <@${clubs[c].manager}>${coIds(clubs[c]).map((u) => ` + <@${u}>`).join("")}`);
     return lines.length ? { color: COLOR, title: `${l.flag} ${l.name} · ${lines.length}/${l.clubs.length}`, description: lines.join("\n") } : null;
   };
   const groups = [[0, 1], [2, 3, 4], [5, 6, 7, 8, 9]];
@@ -397,7 +409,7 @@ export function hofText(t, members, titleNo, finalLine) {
 
 // ---------- Sperrliste ----------
 export function banPanel(bans, clubs) {
-  const clubOf = (u) => Object.entries(clubs).find(([, c]) => c.manager === u || c.co === u)?.[0];
+  const clubOf = (u) => Object.entries(clubs).find(([, c]) => c.manager === u || isCo(c, u))?.[0];
   const lines = bans.map((b) => {
     const c = clubOf(b.user) || b.club;
     return `🚫 <@${b.user}>${c ? ` · ${flagOf(c)} **${esc(c)}**` : ""}\n${BAN_REASONS[b.reason]} · bis <t:${unix(b.until)}:f> (<t:${unix(b.until)}:R>)`;
@@ -429,13 +441,13 @@ export const banStep3 = (u, r) => ({
   components: [row({ type: 3, custom_id: `ban_d:${u}:${r}`, placeholder: "Dauer auswählen", options: BAN_DAYS.map((d) => ({ label: `${d} ${d === 1 ? "Tag" : "Tage"}${d === BAN_DEFAULT_DAYS ? " (Standard)" : ""}`, value: String(d), default: d === BAN_DEFAULT_DAYS })) })],
 });
 
-export const banStep4 = (u, r, d, partner) => ({
-  content: `**Bestätigen:** <@${u}> für **${d} ${d === 1 ? "Tag" : "Tage"}** sperren – ${BAN_REASONS[r]}${partner ? `\n-# <@${partner}> gehört zur selben Mannschaft und kann mitgesperrt werden.` : ""}`,
+export const banStep4 = (u, r, d, partners = []) => ({
+  content: `**Bestätigen:** <@${u}> für **${d} ${d === 1 ? "Tag" : "Tage"}** sperren – ${BAN_REASONS[r]}${partners.length ? `\n-# ${partners.map((p) => `<@${p}>`).join(", ")} ${partners.length > 1 ? "gehören" : "gehört"} zur selben Mannschaft und ${partners.length > 1 ? "können" : "kann"} mitgesperrt werden.` : ""}`,
   embeds: [],
   components: [row(
     btn("Sperren", `ban_ok:${u}:${r}:${d}:1`, 4),
-    ...(partner ? [btn("Beide sperren", `ban_ok:${u}:${r}:${d}:2`, 4)] : []),
-    btn("Mit Notiz sperren", `ban_note:${u}:${r}:${d}:${partner ? 2 : 1}`, 2),
+    ...(partners.length ? [btn(partners.length > 1 ? "Ganze Mannschaft sperren" : "Beide sperren", `ban_ok:${u}:${r}:${d}:2`, 4)] : []),
+    btn("Mit Notiz sperren", `ban_note:${u}:${r}:${d}:${partners.length ? 2 : 1}`, 2),
   )],
 });
 

@@ -1,4 +1,5 @@
 // Trophäenhalle: Medaillen, Statistiken und Rekorde über alle Cups.
+import { isCo } from "./co.mjs";
 import { get, mutate, getConfig, getClubs } from "./store.mjs";
 import { upsertMessage } from "./discord.mjs";
 import { isFreilos, flagOf } from "./data.mjs";
@@ -92,7 +93,7 @@ export async function myStats(uid) {
   const S = { ...init(), ...((await get("stats")) || {}) };
   const x = S.managers[uid];
   const clubs = await getClubs();
-  const mine = Object.entries(clubs).find(([, c]) => c.manager === uid || c.co === uid);
+  const mine = Object.entries(clubs).find(([, c]) => c.manager === uid || isCo(c, uid));
   const now = mine ? `👕 Aktuell: ${flagOf(mine[0])} **${mine[0]}** (${mine[1].manager === uid ? "VM" : "CO-VM"})\n` : "";
   if (!x) return `📊 **Deine Statistik**\n\n${now}Du hast noch keinen Cup gespielt – sobald du dabei bist, landen deine Zahlen hier.`;
   const games = x.w + x.d + x.l, td = x.gf - x.ga;
